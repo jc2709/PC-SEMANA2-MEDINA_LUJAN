@@ -55,12 +55,16 @@ function productStatus(product: Product) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-PE", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  const limaTime = new Date(new Date(value).getTime() - 5 * 60 * 60 * 1000);
+  const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const day = String(limaTime.getUTCDate()).padStart(2, "0");
+  const hour = String(limaTime.getUTCHours()).padStart(2, "0");
+  const minute = String(limaTime.getUTCMinutes()).padStart(2, "0");
+  return `${day} ${months[limaTime.getUTCMonth()]} · ${hour}:${minute}`;
+}
+
+function limaDateKey(value: string | Date) {
+  return new Date(new Date(value).getTime() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export default function WarehouseApp() {
@@ -111,8 +115,8 @@ export default function WarehouseApp() {
   const lowStock = products.filter((product) => product.stock > 0 && product.stock <= product.minStock).length;
   const outOfStock = products.filter((product) => product.stock === 0).length;
   const totalUnits = products.reduce((sum, product) => sum + product.stock, 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const movementsToday = movements.filter((movement) => movement.date.slice(0, 10) === today).length;
+  const today = limaDateKey(new Date());
+  const movementsToday = movements.filter((movement) => limaDateKey(movement.date) === today).length;
 
   const showToast = (message: string) => setToast(message);
 
@@ -224,7 +228,7 @@ export default function WarehouseApp() {
                 <article className="metric-card accent"><span className="metric-icon">▦</span><div><p>Productos registrados</p><strong>{products.length}</strong><small><b>{totalUnits.toLocaleString("es-PE")}</b> unidades disponibles</small></div></article>
                 <article className="metric-card"><span className="metric-icon amber">!</span><div><p>Stock bajo</p><strong>{lowStock}</strong><small>Requieren atención</small></div></article>
                 <article className="metric-card"><span className="metric-icon red">×</span><div><p>Agotados</p><strong>{outOfStock}</strong><small>Sin existencias</small></div></article>
-                <article className="metric-card"><span className="metric-icon blue">↔</span><div><p>Movimientos hoy</p><strong>{movementsToday}</strong><small><b>{movements.filter((m) => m.date.slice(0, 10) === today && m.type === "entry").length} entradas</b> · {movements.filter((m) => m.date.slice(0, 10) === today && m.type === "exit").length} salidas</small></div></article>
+                <article className="metric-card"><span className="metric-icon blue">↔</span><div><p>Movimientos hoy</p><strong>{movementsToday}</strong><small><b>{movements.filter((m) => limaDateKey(m.date) === today && m.type === "entry").length} entradas</b> · {movements.filter((m) => limaDateKey(m.date) === today && m.type === "exit").length} salidas</small></div></article>
               </section>
 
               <div className="dashboard-grid">
