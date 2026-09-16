@@ -172,6 +172,17 @@ test("Fase 4 mantiene aislamiento entre proyectos y permite comparar avance y co
   assert.equal(first.progress, tracking.actualProgress);
 });
 
+test("los formularios principales incluyen carga rápida de caso demo", async () => {
+  const app = await readFile(new URL("../src/CanvasModelApp.tsx", import.meta.url), "utf8");
+  const canvas = await readFile(new URL("../src/modules/canvas/CanvasModule.tsx", import.meta.url), "utf8");
+  const execution = await readFile(new URL("../src/modules/execution/ExecutionModule.tsx", import.meta.url), "utf8");
+  const demoButton = await readFile(new URL("../src/components/DemoFillButton.tsx", import.meta.url), "utf8");
+  assert.match(demoButton, /Cargar caso demo/);
+  assert.match(app, /<DemoFillButton/);
+  assert.match(canvas, /<DemoFillButton/);
+  assert.match(execution, /<DemoFillButton/);
+});
+
 test("el build servido contiene la identidad de Canvas Model IA", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);

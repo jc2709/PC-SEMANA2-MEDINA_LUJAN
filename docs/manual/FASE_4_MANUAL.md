@@ -7,6 +7,12 @@
 3. Selecciona la organización `Comercial Andina S.A.C.` y el periodo `Septiembre 2026`.
 4. La información se guarda en el navegador activo mediante localStorage. No cierres la pestaña antes de ver `● Guardado`.
 
+## Carga rápida de casos demo
+
+En los formularios principales encontrarás el botón `✦ Cargar caso demo`. Úsalo para rellenar un ejemplo sin escribir todos los campos y luego pulsa el botón normal de guardar. El botón no guarda automáticamente, por lo que puedes revisar o editar el ejemplo antes de confirmar.
+
+Está disponible en Organización, Periodos, Registro manual, Canvas, Proyectos, Actividades, Hitos y Seguimiento.
+
 ## Pruebas principales
 
 ### F4-PROJ-01 — Crear y aprobar proyecto
