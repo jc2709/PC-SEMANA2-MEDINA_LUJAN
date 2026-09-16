@@ -44,3 +44,16 @@ Evidencia de cierre: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS 
 Evidencia de cierre de Fase 3: build PASS, lint PASS y 10/10 pruebas automáticas PASS. La validación visual final queda documentada en el manual de Fase 3.
 
 Evidencia de cierre de Fase 2: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (8/8 pruebas). La prueba visual confirmó creación, edición, clonación, comparación y aprobación sin errores de consola.
+
+## Fase 4
+
+| ID | Módulo | Escenario | Resultado esperado | Resultado |
+| --- | --- | --- | --- | --- |
+| F4-PROJ-01 | Proyectos | Crear y aprobar proyecto | Se registra el proyecto y cambia de borrador a aprobado | Cubierto por UI y manual |
+| F4-PROJ-02 | Proyectos | Editar proyecto aprobado | El cambio se guarda y solicita nueva aprobación | Cubierto por handler y manual |
+| F4-GANTT-01 | Gantt | Crear tareas, dependencias e hitos | Se muestran en tabla y cronograma | Cubierto por UI y manual |
+| F4-TRACK-01 | Seguimiento | Registrar plan vs real | Se calculan desviaciones y se actualiza el avance del proyecto | Cubierto por modelo y UI |
+| F4-PER-01 | Persistencia | Recargar ejecución | Proyectos, tareas, hitos y seguimiento permanecen | Cubierto por migración y manual |
+| F4-VAL-01 | Validaciones | Fechas y campos obligatorios | No se crean registros inválidos | Cubierto por handlers |
+
+Evidencia técnica de Fase 4: `npm run build` PASS, `npm run lint` PASS y 12/12 pruebas automáticas PASS. La validación manual queda descrita en `docs/manual/FASE_4_MANUAL.md` para la revisión del usuario.

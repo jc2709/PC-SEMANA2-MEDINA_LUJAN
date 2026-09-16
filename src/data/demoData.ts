@@ -1,4 +1,4 @@
-import type { AppState, CanvasBlockKey, CanvasElement, CanvasScenario, CanvasVersion, HistoricalObservation, Organization, Period } from "../types/domain";
+import type { AppState, CanvasBlockKey, CanvasElement, CanvasScenario, CanvasVersion, HistoricalObservation, Organization, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry } from "../types/domain";
 
 export const DEMO_ORGANIZATION: Organization = {
   id: "org-comercial-andina",
@@ -103,9 +103,82 @@ export const DEMO_CANVAS_VERSIONS: CanvasVersion[] = [
   { id: "canvas-to-be-demo-v1", organizationId: DEMO_ORGANIZATION.id, periodId: "period-2026-09", scenarioId: "scenario-moderado", kind: "TO_BE", version: 1, name: "Canal digital propuesto", status: "BORRADOR", sourceVersionId: "canvas-as-is-demo-v1", elements: DEMO_TO_BE_ELEMENTS, createdAt: "2026-09-02T09:00:00-05:00", updatedAt: "2026-09-02T09:00:00-05:00" },
 ];
 
+export const DEMO_PROJECTS: Project[] = [
+  {
+    id: "project-digital-channel",
+    organizationId: DEMO_ORGANIZATION.id,
+    periodId: "period-2026-09",
+    code: "P-001",
+    name: "Piloto de catálogo digital",
+    description: "Implementar un catálogo digital conectado al seguimiento comercial para mejorar la recompra.",
+    originGap: "La venta depende principalmente del contacto presencial y se pierde seguimiento de oportunidades.",
+    sourceCanvasVersionId: "canvas-to-be-demo-v1",
+    sourceElementId: "canvas-to-be-digital-channel",
+    objective: "Aumentar la conversión de clientes activos mediante un canal digital piloto.",
+    responsible: "María Medina",
+    startsOn: "2026-09-05",
+    endsOn: "2026-11-30",
+    plannedBudget: 12500,
+    status: "EN_CURSO",
+    priority: "ALTA",
+    risks: "Adopción inicial del equipo comercial y calidad del catálogo.",
+    relatedKpi: "Conversión",
+    progress: 35,
+    observations: "El piloto inició con diez clientes frecuentes.",
+    approvalStatus: "APROBADO",
+    createdAt: "2026-09-03T09:00:00-05:00",
+    updatedAt: "2026-10-15T18:00:00-05:00",
+    approvedAt: "2026-09-04T10:00:00-05:00",
+  },
+  {
+    id: "project-order-standardization",
+    organizationId: DEMO_ORGANIZATION.id,
+    periodId: "period-2026-09",
+    code: "P-002",
+    name: "Estandarización de pedidos",
+    description: "Definir un flujo único para registrar, validar y entregar pedidos omnicanal.",
+    originGap: "Los pedidos se registran en canales distintos y generan reprocesos operativos.",
+    sourceCanvasVersionId: "canvas-to-be-demo-v1",
+    sourceElementId: "canvas-to-be-digital-channel",
+    objective: "Reducir errores de registro y hacer visible el estado de cada pedido.",
+    responsible: "Luis Luján",
+    startsOn: "2026-09-15",
+    endsOn: "2026-12-15",
+    plannedBudget: 9800,
+    status: "EN_RIESGO",
+    priority: "MEDIA",
+    risks: "Falta de disponibilidad del equipo de operaciones para validar el flujo.",
+    relatedKpi: "Costos operativos",
+    progress: 20,
+    observations: "La definición del flujo está pendiente de validación con despacho.",
+    approvalStatus: "BORRADOR",
+    createdAt: "2026-09-10T09:00:00-05:00",
+    updatedAt: "2026-10-12T18:00:00-05:00",
+  },
+];
+
+export const DEMO_PROJECT_TASKS: ProjectTask[] = [
+  { id: "task-digital-discovery", projectId: "project-digital-channel", name: "Definir catálogo mínimo", description: "Seleccionar productos, precios y reglas del piloto.", startsOn: "2026-09-05", endsOn: "2026-09-18", responsible: "María Medina", dependencyTaskId: null, status: "COMPLETADA", progress: 100, plannedCost: 1800, actualCost: 1650, createdAt: "2026-09-03T09:00:00-05:00", updatedAt: "2026-09-18T18:00:00-05:00" },
+  { id: "task-digital-build", projectId: "project-digital-channel", name: "Configurar canal y mensajes", description: "Preparar catálogo digital, respuestas y registro de oportunidades.", startsOn: "2026-09-19", endsOn: "2026-10-20", responsible: "Luis Luján", dependencyTaskId: "task-digital-discovery", status: "EN_CURSO", progress: 55, plannedCost: 6200, actualCost: 5900, createdAt: "2026-09-03T09:00:00-05:00", updatedAt: "2026-10-15T18:00:00-05:00" },
+  { id: "task-digital-pilot", projectId: "project-digital-channel", name: "Ejecutar piloto con clientes", description: "Medir conversaciones, conversiones y comentarios de clientes.", startsOn: "2026-10-21", endsOn: "2026-11-30", responsible: "Equipo comercial", dependencyTaskId: "task-digital-build", status: "PENDIENTE", progress: 0, plannedCost: 4500, actualCost: 0, createdAt: "2026-09-03T09:00:00-05:00", updatedAt: "2026-09-03T09:00:00-05:00" },
+  { id: "task-orders-map", projectId: "project-order-standardization", name: "Mapear flujo actual", description: "Documentar pasos, responsables y puntos de reproceso.", startsOn: "2026-09-15", endsOn: "2026-10-05", responsible: "Luis Luján", dependencyTaskId: null, status: "COMPLETADA", progress: 100, plannedCost: 2400, actualCost: 2300, createdAt: "2026-09-10T09:00:00-05:00", updatedAt: "2026-10-05T18:00:00-05:00" },
+  { id: "task-orders-validate", projectId: "project-order-standardization", name: "Validar flujo con despacho", description: "Revisar el flujo propuesto y acordar criterios de aceptación.", startsOn: "2026-10-06", endsOn: "2026-10-25", responsible: "Operaciones", dependencyTaskId: "task-orders-map", status: "BLOQUEADA", progress: 20, plannedCost: 3100, actualCost: 1800, createdAt: "2026-09-10T09:00:00-05:00", updatedAt: "2026-10-12T18:00:00-05:00" },
+];
+
+export const DEMO_PROJECT_MILESTONES: ProjectMilestone[] = [
+  { id: "milestone-digital-approved", projectId: "project-digital-channel", name: "Catálogo aprobado", date: "2026-09-18", responsible: "María Medina", status: "ALCANZADO", notes: "Se aprobó el catálogo inicial para clientes frecuentes.", createdAt: "2026-09-03T09:00:00-05:00", updatedAt: "2026-09-18T18:00:00-05:00" },
+  { id: "milestone-digital-pilot", projectId: "project-digital-channel", name: "Inicio de piloto", date: "2026-10-21", responsible: "Equipo comercial", status: "PENDIENTE", notes: "Requiere finalizar configuración de mensajes.", createdAt: "2026-09-03T09:00:00-05:00", updatedAt: "2026-09-03T09:00:00-05:00" },
+  { id: "milestone-orders-validation", projectId: "project-order-standardization", name: "Flujo validado", date: "2026-10-25", responsible: "Operaciones", status: "ATRASADO", notes: "Pendiente de agenda con despacho.", createdAt: "2026-09-10T09:00:00-05:00", updatedAt: "2026-10-12T18:00:00-05:00" },
+];
+
+export const DEMO_PROJECT_TRACKING: ProjectTrackingEntry[] = [
+  { id: "tracking-digital-oct", projectId: "project-digital-channel", recordedAt: "2026-10-15", plannedProgress: 45, actualProgress: 35, plannedCost: 8000, actualCost: 7550, status: "EN_CURSO", milestone: "Configuración del canal", risks: "Adopción del equipo comercial.", evidence: "Reporte de diez clientes piloto.", comments: "La configuración avanza con una desviación de diez puntos.", createdAt: "2026-10-15T18:00:00-05:00" },
+  { id: "tracking-orders-oct", projectId: "project-order-standardization", recordedAt: "2026-10-12", plannedProgress: 35, actualProgress: 20, plannedCost: 4200, actualCost: 4100, status: "EN_RIESGO", milestone: "Mapeo del flujo actual", risks: "Validación retrasada por disponibilidad de despacho.", evidence: "Mapa de proceso v1.", comments: "Definir una nueva fecha de sesión con operaciones.", createdAt: "2026-10-12T18:00:00-05:00" },
+];
+
 export function createDemoState(): AppState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     organizations: [DEMO_ORGANIZATION],
     periods: DEMO_PERIODS,
     observations: DEMO_OBSERVATIONS,
@@ -113,6 +186,10 @@ export function createDemoState(): AppState {
     aiHistory: [],
     scenarios: DEMO_SCENARIOS,
     canvasVersions: DEMO_CANVAS_VERSIONS,
+    projects: DEMO_PROJECTS,
+    projectTasks: DEMO_PROJECT_TASKS,
+    projectMilestones: DEMO_PROJECT_MILESTONES,
+    projectTracking: DEMO_PROJECT_TRACKING,
     activeOrganizationId: DEMO_ORGANIZATION.id,
     activePeriodId: "period-2026-09",
   };

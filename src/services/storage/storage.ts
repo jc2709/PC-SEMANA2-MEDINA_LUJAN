@@ -13,12 +13,18 @@ function hasStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-type PersistedState = Omit<AppState, "schemaVersion"> & { schemaVersion: 1 | 2 };
+type PersistedState = Omit<AppState, "schemaVersion" | "projects" | "projectTasks" | "projectMilestones" | "projectTracking"> & {
+  schemaVersion: 1 | 2 | 3;
+  projects?: AppState["projects"];
+  projectTasks?: AppState["projectTasks"];
+  projectMilestones?: AppState["projectMilestones"];
+  projectTracking?: AppState["projectTracking"];
+};
 
 function isAppState(value: unknown): value is PersistedState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as { schemaVersion?: number; organizations?: unknown; periods?: unknown; observations?: unknown; imports?: unknown; aiHistory?: unknown; activeOrganizationId?: unknown; activePeriodId?: unknown };
-  return (candidate.schemaVersion === 1 || candidate.schemaVersion === 2)
+  return (candidate.schemaVersion === 1 || candidate.schemaVersion === 2 || candidate.schemaVersion === 3)
     && Array.isArray(candidate.organizations)
     && Array.isArray(candidate.periods)
     && Array.isArray(candidate.observations)
@@ -28,13 +34,16 @@ function isAppState(value: unknown): value is PersistedState {
     && typeof candidate.activePeriodId === "string";
 }
 
-function migrateState(state: AppState): AppState {
-  if (state.schemaVersion === 2) return state;
+function migrateState(state: PersistedState): AppState {
   return {
     ...state,
-    schemaVersion: 2,
-    scenarios: [],
-    canvasVersions: [],
+    schemaVersion: 3,
+    scenarios: state.scenarios ?? [],
+    canvasVersions: state.canvasVersions ?? [],
+    projects: state.projects ?? [],
+    projectTasks: state.projectTasks ?? [],
+    projectMilestones: state.projectMilestones ?? [],
+    projectTracking: state.projectTracking ?? [],
   };
 }
 

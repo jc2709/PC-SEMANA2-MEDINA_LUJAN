@@ -20,7 +20,7 @@ test("el demo de Fase 2 contiene nueve bloques, AS IS, TO BE y escenarios aislad
   const state = createDemoState();
   const asIs = state.canvasVersions.find((item) => item.kind === "AS_IS");
   const toBe = state.canvasVersions.find((item) => item.kind === "TO_BE");
-  assert.equal(state.schemaVersion, 2);
+  assert.equal(state.schemaVersion, 3);
   assert.equal(state.scenarios.length, 2);
   assert.ok(asIs && toBe);
   assert.equal(new Set(asIs.elements.map((item) => item.block)).size, 9);
@@ -29,7 +29,7 @@ test("el demo de Fase 2 contiene nueve bloques, AS IS, TO BE y escenarios aislad
   assert.ok(toBe.elements.some((item) => item.title === "WhatsApp Business"));
 });
 
-test("la migración de Fase 1 conserva datos y agrega estructuras Canvas vacías", async () => {
+test("la migración conserva datos y agrega estructuras Canvas y ejecución vacías", async () => {
   const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
   const { loadState, STORAGE_KEY } = await import(new URL("../src/services/storage/storage.ts", import.meta.url).href);
   const records = new Map();
@@ -38,12 +38,20 @@ test("la migración de Fase 1 conserva datos y agrega estructuras Canvas vacías
   legacy.schemaVersion = 1;
   delete legacy.scenarios;
   delete legacy.canvasVersions;
+  delete legacy.projects;
+  delete legacy.projectTasks;
+  delete legacy.projectMilestones;
+  delete legacy.projectTracking;
   records.set(STORAGE_KEY, JSON.stringify(legacy));
   const migrated = loadState(createDemoState());
-  assert.equal(migrated.state.schemaVersion, 2);
+  assert.equal(migrated.state.schemaVersion, 3);
   assert.equal(migrated.state.organizations[0].name, "Comercial Andina S.A.C.");
   assert.deepEqual(migrated.state.scenarios, []);
   assert.deepEqual(migrated.state.canvasVersions, []);
+  assert.deepEqual(migrated.state.projects, []);
+  assert.deepEqual(migrated.state.projectTasks, []);
+  assert.deepEqual(migrated.state.projectMilestones, []);
+  assert.deepEqual(migrated.state.projectTracking, []);
   delete globalThis.window;
 });
 
@@ -131,6 +139,37 @@ test("Fase 3 normaliza respuestas estructuradas y descarta propuestas inválidas
   assert.equal(response?.findings.length, 1);
   assert.equal(response?.proposals.length, 1);
   assert.equal(response?.proposals[0].block, "channels");
+});
+
+test("Fase 4 contiene proyectos, tareas, hitos y seguimiento trazables", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const state = createDemoState();
+  assert.ok(state.projects.length >= 2);
+  assert.ok(state.projects.every((project) => project.organizationId === state.organizations[0].id && state.periods.some((period) => period.id === project.periodId && period.organizationId === project.organizationId)));
+  assert.ok(state.projects.every((project) => project.sourceCanvasVersionId && state.canvasVersions.some((version) => version.id === project.sourceCanvasVersionId && version.kind === "TO_BE")));
+  assert.ok(state.projectTasks.length >= 4);
+  assert.ok(state.projectTasks.every((task) => state.projects.some((project) => project.id === task.projectId)));
+  assert.ok(state.projectMilestones.every((milestone) => state.projects.some((project) => project.id === milestone.projectId)));
+  assert.ok(state.projectTracking.every((entry) => state.projects.some((project) => project.id === entry.projectId)));
+  assert.ok(state.projectTracking.some((entry) => entry.actualProgress < entry.plannedProgress));
+  assert.ok(state.projectTasks.some((task) => task.dependencyTaskId && state.projectTasks.some((dependency) => dependency.id === task.dependencyTaskId)));
+});
+
+test("Fase 4 mantiene aislamiento entre proyectos y permite comparar avance y costos", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const state = createDemoState();
+  const [first, second] = state.projects;
+  const firstTasks = state.projectTasks.filter((task) => task.projectId === first.id);
+  const secondTasks = state.projectTasks.filter((task) => task.projectId === second.id);
+  assert.ok(firstTasks.length > 0 && secondTasks.length > 0);
+  assert.equal(new Set(firstTasks.map((task) => task.id)).size, firstTasks.length);
+  assert.equal(new Set(secondTasks.map((task) => task.id)).size, secondTasks.length);
+  assert.ok(firstTasks.every((task) => task.projectId !== second.id));
+  const tracking = state.projectTracking.find((entry) => entry.projectId === first.id);
+  assert.ok(tracking);
+  assert.equal(typeof tracking.plannedCost, "number");
+  assert.equal(typeof tracking.actualCost, "number");
+  assert.equal(first.progress, tracking.actualProgress);
 });
 
 test("el build servido contiene la identidad de Canvas Model IA", async () => {

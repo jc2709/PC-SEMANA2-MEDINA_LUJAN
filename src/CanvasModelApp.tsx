@@ -9,7 +9,8 @@ import { parseDataFile, previewStats, type ImportPreview } from "./services/impo
 import { loadState, saveState } from "./services/storage/storage";
 import { CanvasComparisonView, CanvasEditorView, type CanvasElementDraft, type CanvasScenarioDraft, type CanvasVersionDraft } from "./modules/canvas/CanvasModule";
 import { AiAnalysisView } from "./modules/ai/AiModule";
-import type { AppState, AppView, CanvasKind, CanvasStatus, CanvasVersion, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
+import { GanttView, ProjectsView, TrackingView, type ProjectDraft, type ProjectMilestoneDraft, type ProjectTaskDraft, type ProjectTrackingDraft } from "./modules/execution/ExecutionModule";
+import type { AppState, AppView, CanvasKind, CanvasStatus, CanvasVersion, DataQuality, Organization, OrganizationSize, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry, Sector } from "./types/domain";
 import { formatCurrency, formatDate, formatNumber, makeId, todayInputValue } from "./utils/format";
 
 type Modal = "organization" | "edit-organization" | "period" | "edit-period" | "edit-observation" | null;
@@ -40,9 +41,9 @@ const viewMeta: Record<AppView, { eyebrow: string; title: string; description: s
   "canvas-as-is": { eyebrow: "CANVAS / ACTUAL", title: "Canvas AS IS", description: "Documenta el modelo de negocio actual con evidencia y responsables." },
   "canvas-to-be": { eyebrow: "CANVAS / FUTURO", title: "Canvas TO BE", description: "Construye alternativas futuras revisables y versionadas." },
   comparison: { eyebrow: "CANVAS / BRECHAS", title: "Comparación AS IS vs TO BE", description: "Identifica qué se crea, modifica, elimina o mantiene." },
-  projects: { eyebrow: "EJECUCIÓN / CAMBIOS", title: "Proyectos", description: "La gestión de proyectos se habilitará en la Fase 4." },
-  gantt: { eyebrow: "EJECUCIÓN / PLAN", title: "Gantt", description: "El plan de actividades se habilitará en la Fase 4." },
-  tracking: { eyebrow: "EJECUCIÓN / CONTROL", title: "Seguimiento", description: "El seguimiento de ejecución se habilitará en la Fase 4." },
+  projects: { eyebrow: "EJECUCIÓN / CAMBIOS", title: "Proyectos", description: "Convierte las brechas del Canvas TO BE en iniciativas aprobables y trazables." },
+  gantt: { eyebrow: "EJECUCIÓN / PLAN", title: "Gantt", description: "Calendariza actividades, dependencias y hitos para ejecutar el cambio." },
+  tracking: { eyebrow: "EJECUCIÓN / CONTROL", title: "Seguimiento", description: "Compara avance y costos reales frente al plan, con riesgos y evidencia." },
   kpi: { eyebrow: "ANALÍTICA / INDICADORES", title: "KPI", description: "La definición de indicadores se habilitará en la Fase 5." },
   prediction: { eyebrow: "ANALÍTICA / PRONÓSTICO", title: "Predicción", description: "El motor predictivo local se habilitará en la Fase 5." },
   simulation: { eyebrow: "ANALÍTICA / ESCENARIOS", title: "Simulación", description: "El simulador se habilitará en la Fase 5." },
@@ -342,6 +343,136 @@ export default function CanvasModelApp() {
     notify("Escenario creado y guardado.");
   }
 
+  function handleCreateProject(draft: ProjectDraft) {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización y periodo antes de crear un proyecto.");
+      return;
+    }
+    if (!draft.code || !draft.name || !draft.description || !draft.originGap || !draft.objective || !draft.responsible || !draft.startsOn || !draft.endsOn || draft.endsOn < draft.startsOn) {
+      notify("Completa los campos obligatorios y revisa el rango de fechas del proyecto.");
+      return;
+    }
+    if (state.projects.some((project) => project.organizationId === activeOrganization.id && project.periodId === activePeriod.id && project.code.toLowerCase() === draft.code.toLowerCase())) {
+      notify("Ese código de proyecto ya existe en el periodo activo.");
+      return;
+    }
+    if (draft.sourceCanvasVersionId && !state.canvasVersions.some((version) => version.id === draft.sourceCanvasVersionId && version.organizationId === activeOrganization.id && version.periodId === activePeriod.id && version.kind === "TO_BE")) {
+      notify("El Canvas fuente no pertenece al contexto activo.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const project: Project = { id: makeId("project"), organizationId: activeOrganization.id, periodId: activePeriod.id, ...draft, sourceCanvasVersionId: draft.sourceCanvasVersionId ?? null, sourceElementId: draft.sourceElementId ?? null, approvalStatus: "BORRADOR", createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, projects: [project, ...current.projects] }));
+    notify("Proyecto creado como borrador y guardado.");
+  }
+
+  function handleUpdateProject(projectId: string, draft: ProjectDraft) {
+    const existing = state.projects.find((project) => project.id === projectId && project.organizationId === activeOrganization?.id && project.periodId === activePeriod?.id);
+    if (!existing) return;
+    if (!draft.code || !draft.name || !draft.description || !draft.originGap || !draft.objective || !draft.responsible || !draft.startsOn || !draft.endsOn || draft.endsOn < draft.startsOn) {
+      notify("Completa los campos obligatorios y revisa el rango de fechas del proyecto.");
+      return;
+    }
+    if (state.projects.some((project) => project.id !== projectId && project.organizationId === existing.organizationId && project.periodId === existing.periodId && project.code.toLowerCase() === draft.code.toLowerCase())) {
+      notify("Ese código de proyecto ya existe en el periodo activo.");
+      return;
+    }
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, projects: current.projects.map((project) => project.id === projectId ? { ...project, ...draft, sourceCanvasVersionId: draft.sourceCanvasVersionId ?? null, sourceElementId: draft.sourceElementId ?? null, approvalStatus: "BORRADOR" as const, approvedAt: undefined, updatedAt: now } : project) }));
+    notify("Proyecto actualizado. El plan volvió a borrador para revisión.");
+  }
+
+  function handleApproveProject(projectId: string) {
+    if (!state.projects.some((project) => project.id === projectId && project.organizationId === activeOrganization?.id && project.periodId === activePeriod?.id)) return;
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, projects: current.projects.map((project) => project.id === projectId ? { ...project, approvalStatus: "APROBADO" as const, approvedAt: now, updatedAt: now } : project) }));
+    notify("Plan del proyecto aprobado y guardado.");
+  }
+
+  function projectInActiveContext(projectId: string) {
+    return state.projects.find((project) => project.id === projectId && project.organizationId === activeOrganization?.id && project.periodId === activePeriod?.id);
+  }
+
+  function handleCreateTask(draft: ProjectTaskDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    if (!project || !draft.name || !draft.responsible || !draft.startsOn || !draft.endsOn || draft.endsOn < draft.startsOn || draft.startsOn < project.startsOn || draft.endsOn > project.endsOn) {
+      notify("Revisa la actividad: debe tener datos completos y estar dentro del rango del proyecto.");
+      return;
+    }
+    if (state.projectTasks.some((task) => task.projectId === project.id && task.name.toLowerCase() === draft.name.toLowerCase())) {
+      notify("Ya existe una actividad con ese nombre en el proyecto.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const task: ProjectTask = { id: makeId("task"), ...draft, dependencyTaskId: draft.dependencyTaskId ?? null, createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, projectTasks: [task, ...current.projectTasks] }));
+    notify("Actividad guardada en el Gantt.");
+  }
+
+  function handleUpdateTask(taskId: string, draft: ProjectTaskDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    const existing = state.projectTasks.find((task) => task.id === taskId && task.projectId === draft.projectId);
+    if (!project || !existing || !draft.name || !draft.responsible || !draft.startsOn || !draft.endsOn || draft.endsOn < draft.startsOn || draft.startsOn < project.startsOn || draft.endsOn > project.endsOn) {
+      notify("Revisa la actividad y sus fechas.");
+      return;
+    }
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, projectTasks: current.projectTasks.map((task) => task.id === taskId ? { ...task, ...draft, dependencyTaskId: draft.dependencyTaskId ?? null, updatedAt: now } : task) }));
+    notify("Actividad actualizada y guardada.");
+  }
+
+  function handleCreateMilestone(draft: ProjectMilestoneDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    if (!project || !draft.name || !draft.responsible || !draft.date || draft.date < project.startsOn || draft.date > project.endsOn) {
+      notify("Revisa el hito: la fecha debe estar dentro del proyecto.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const milestone: ProjectMilestone = { id: makeId("milestone"), ...draft, createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, projectMilestones: [milestone, ...current.projectMilestones] }));
+    notify("Hito guardado en el plan.");
+  }
+
+  function handleUpdateMilestone(milestoneId: string, draft: ProjectMilestoneDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    const existing = state.projectMilestones.find((milestone) => milestone.id === milestoneId && milestone.projectId === draft.projectId);
+    if (!project || !existing || !draft.name || !draft.responsible || !draft.date || draft.date < project.startsOn || draft.date > project.endsOn) {
+      notify("Revisa el hito y su fecha.");
+      return;
+    }
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, projectMilestones: current.projectMilestones.map((milestone) => milestone.id === milestoneId ? { ...milestone, ...draft, updatedAt: now } : milestone) }));
+    notify("Hito actualizado y guardado.");
+  }
+
+  function handleCreateTracking(draft: ProjectTrackingDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    if (!project || !draft.recordedAt) {
+      notify("Selecciona una fecha de corte para el seguimiento.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const entry: ProjectTrackingEntry = { id: makeId("tracking"), ...draft, createdAt: now };
+    commitState((current) => ({ ...current, projectTracking: [entry, ...current.projectTracking], projects: current.projects.map((item) => item.id === project.id ? { ...item, progress: draft.actualProgress, status: draft.status, updatedAt: now } : item) }));
+    notify("Corte de seguimiento guardado; avance del proyecto actualizado.");
+  }
+
+  function handleUpdateTracking(entryId: string, draft: ProjectTrackingDraft) {
+    const project = projectInActiveContext(draft.projectId);
+    const existing = state.projectTracking.find((entry) => entry.id === entryId && entry.projectId === draft.projectId);
+    if (!project || !existing || !draft.recordedAt) {
+      notify("Revisa la fecha del corte de seguimiento.");
+      return;
+    }
+    const now = new Date().toISOString();
+    commitState((current) => {
+      const projectTracking = current.projectTracking.map((entry) => entry.id === entryId ? { ...entry, ...draft } : entry);
+      const latest = [...projectTracking].filter((entry) => entry.projectId === project.id).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+      return { ...current, projectTracking, projects: current.projects.map((item) => item.id === project.id && latest ? { ...item, progress: latest.actualProgress, status: latest.status, updatedAt: now } : item) };
+    });
+    notify("Corte de seguimiento actualizado y guardado.");
+  }
+
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -476,6 +607,7 @@ export default function CanvasModelApp() {
     notify("Datos exportados en CSV.");
   }
 
+  const activeProjects = useMemo(() => state.projects.filter((project) => project.organizationId === activeOrganization?.id && project.periodId === activePeriod?.id), [activeOrganization?.id, activePeriod?.id, state.projects]);
   const meta = viewMeta[view];
   return (
     <main className="canvas-shell">
@@ -515,9 +647,12 @@ export default function CanvasModelApp() {
           {(view === "canvas-as-is" || view === "canvas-to-be") && <CanvasEditorView state={state} organization={activeOrganization} period={activePeriod} kind={view === "canvas-as-is" ? "AS_IS" : "TO_BE"} onCreateVersion={handleCreateCanvasVersion} onCloneVersion={handleCloneCanvasVersion} onSaveElement={handleSaveCanvasElement} onDeleteElement={handleDeleteCanvasElement} onTransitionStatus={handleCanvasStatus} onCreateScenario={handleCreateScenario} />}
           {view === "comparison" && <CanvasComparisonView state={state} organization={activeOrganization} period={activePeriod} />}
           {view === "ai-analysis" && <AiAnalysisView state={state} organization={activeOrganization} period={activePeriod} response={lastAiResponse} historyId={lastAiHistoryId} loading={aiLoading} onAnalyze={(versionId) => { void runAiOperation("analizarCanvas", versionId); }} onGenerateToBe={(versionId) => { void runAiOperation("generarToBe", versionId); }} onDecision={(decision, sourceVersionId, historyId, response, proposals) => handleAiDecision(decision, sourceVersionId, historyId, response, proposals)} onNavigateCanvas={() => navigate("canvas-as-is")} />}
+          {view === "projects" && <ProjectsView organization={activeOrganization} period={activePeriod} projects={activeProjects} canvasVersions={state.canvasVersions} tasks={state.projectTasks} milestones={state.projectMilestones} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onApproveProject={handleApproveProject} onNavigate={navigate} />}
+          {view === "gantt" && <GanttView organization={activeOrganization} projects={activeProjects} tasks={state.projectTasks} milestones={state.projectMilestones} onCreateTask={handleCreateTask} onUpdateTask={handleUpdateTask} onCreateMilestone={handleCreateMilestone} onUpdateMilestone={handleUpdateMilestone} />}
+          {view === "tracking" && <TrackingView organization={activeOrganization} projects={activeProjects} tracking={state.projectTracking} onCreateTracking={handleCreateTracking} onUpdateTracking={handleUpdateTracking} />}
           {view === "ai-history" && <AiHistoryViewV3 entries={state.aiHistory} organization={activeOrganization} />}
           {view === "configuration" && <ConfigurationView storageAvailable={storageAvailable} persisted={storageAvailable && hydrated} onMockAi={runMockAssistant} aiLoading={aiLoading} />}
-          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-analysis", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
+          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-analysis", "projects", "gantt", "tracking", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
         </div>
       </section>
 
@@ -538,8 +673,8 @@ function DashboardView({ state, organization, period, observations, latestImport
   const sources = new Set(observations.map((item) => item.source)).size;
   return <>
     <section className="welcome-grid">
-      <div className="welcome-card"><div><span className="eyebrow light">FASE 3 · INTELIGENCIA ARTIFICIAL</span><h2>Un contexto confiable para tomar decisiones.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>DATOS</span><i>AS IS</i><b>IA</b></div></div>
-      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>IA propone, tú decides</h3><p>Los hallazgos y cambios futuros se presentan como propuestas revisables, sin modificar automáticamente el Canvas.</p><button className="text-button" onClick={() => navigate("ai-analysis")}>Abrir análisis IA →</button></div>
+      <div className="welcome-card"><div><span className="eyebrow light">FASE 4 · EJECUCIÓN</span><h2>Del Canvas aprobado a la acción.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>TO BE</span><i>PLAN</i><b>GANTT</b></div></div>
+      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>Planifica, aprueba y mide</h3><p>Las brechas del modelo futuro se convierten en proyectos con responsables, actividades, costos y seguimiento real.</p><button className="text-button" onClick={() => navigate("projects")}>Abrir proyectos →</button></div>
     </section>
     <div className="metric-grid">
       <MetricCard label="Organizaciones" value={formatNumber(state.organizations.length, 0)} detail="Contextos registrados" icon="▣" tone="green" />

@@ -5,6 +5,11 @@ export type DataQuality = "ALTA" | "MEDIA" | "BAJA";
 export type CanvasKind = "AS_IS" | "TO_BE";
 export type CanvasStatus = "BORRADOR" | "EN_REVISION" | "APROBADO" | "ARCHIVADO";
 export type ScenarioType = "BASE" | "CONSERVADOR" | "MODERADO" | "AGRESIVO" | "PERSONALIZADO";
+export type ProjectApprovalStatus = "BORRADOR" | "APROBADO";
+export type ProjectStatus = "NO_INICIADO" | "EN_CURSO" | "EN_RIESGO" | "RETRASADO" | "COMPLETADO" | "CANCELADO";
+export type ProjectPriority = "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
+export type ProjectTaskStatus = "PENDIENTE" | "EN_CURSO" | "BLOQUEADA" | "COMPLETADA";
+export type ProjectMilestoneStatus = "PENDIENTE" | "ALCANZADO" | "ATRASADO";
 export type CanvasBlockKey =
   | "customer-segments"
   | "value-propositions"
@@ -129,8 +134,80 @@ export interface CanvasVersion {
   approvedAt?: string;
 }
 
+export interface Project {
+  id: string;
+  organizationId: string;
+  periodId: string;
+  code: string;
+  name: string;
+  description: string;
+  originGap: string;
+  sourceCanvasVersionId: string | null;
+  sourceElementId: string | null;
+  objective: string;
+  responsible: string;
+  startsOn: string;
+  endsOn: string;
+  plannedBudget: number;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  risks: string;
+  relatedKpi: string;
+  progress: number;
+  observations: string;
+  approvalStatus: ProjectApprovalStatus;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string;
+  startsOn: string;
+  endsOn: string;
+  responsible: string;
+  dependencyTaskId: string | null;
+  status: ProjectTaskStatus;
+  progress: number;
+  plannedCost: number;
+  actualCost: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  projectId: string;
+  name: string;
+  date: string;
+  responsible: string;
+  status: ProjectMilestoneStatus;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectTrackingEntry {
+  id: string;
+  projectId: string;
+  recordedAt: string;
+  plannedProgress: number;
+  actualProgress: number;
+  plannedCost: number;
+  actualCost: number;
+  status: ProjectStatus;
+  milestone: string;
+  risks: string;
+  evidence: string;
+  comments: string;
+  createdAt: string;
+}
+
 export interface AppState {
-  schemaVersion: 2;
+  schemaVersion: 3;
   organizations: Organization[];
   periods: Period[];
   observations: HistoricalObservation[];
@@ -138,6 +215,10 @@ export interface AppState {
   aiHistory: AiHistoryEntry[];
   scenarios: CanvasScenario[];
   canvasVersions: CanvasVersion[];
+  projects: Project[];
+  projectTasks: ProjectTask[];
+  projectMilestones: ProjectMilestone[];
+  projectTracking: ProjectTrackingEntry[];
   activeOrganizationId: string;
   activePeriodId: string;
 }
