@@ -10,5 +10,7 @@
 8. Recarga o cierra y vuelve a abrir el navegador. El indicador debe mostrar **Guardado** y los registros deben permanecer.
 9. En Dashboard, pulsa **Probar asistente IA · MOCK**. La pantalla debe indicar **Modo demostración / MOCK**; la aplicación no debe bloquearse.
 10. Revisa Configuración para ver persistencia, modo offline y separación servidor/cliente de la clave IA.
+11. En Organización pulsa **Editar** sobre una organización o periodo y verifica que los cambios permanecen después de recargar.
+12. En Datos pulsa **Editar** sobre una observación, cambia su KPI/valor/fuente o periodo y recarga para confirmar que el dato actualizado permanece.
 
 Los módulos Canvas y de analítica muestran deliberadamente que pertenecen a fases posteriores.

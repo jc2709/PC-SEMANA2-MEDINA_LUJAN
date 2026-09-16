@@ -9,7 +9,9 @@
 | F1-IMP-01 | Importación | Importar CSV válido | Se muestra preview y se agregan solo filas confirmadas | PASS — test automático de parser |
 | F1-IMP-02 | Importación | Importar fila con valor inválido | La fila queda marcada y no se importa silenciosamente | PASS — test automático de parser |
 | F1-PER-02 | Persistencia | Recargar la aplicación | Organizaciones, periodos y observaciones permanecen | PASS — recarga visual y localStorage |
+| F1-PER-03 | Persistencia | Corromper snapshot principal | El respaldo local permite recuperar los datos | PASS — test automático de recuperación |
+| F1-EDIT-01 | Edición | Editar organización, periodo y observación | Los cambios se guardan y permanecen después de recargar | PASS — navegador local |
 | F1-AI-01 | IA | Ejecutar sin clave Gemini | Se muestra MOCK y las funciones locales continúan | PASS — contrato del endpoint |
 | F1-SEC-01 | Seguridad | Buscar clave en frontend versionado | No existe clave real ni secreto en `.env.example` | PASS — test automático |
 
-Evidencia de cierre: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (4/4 pruebas). La prueba visual se ejecutó sobre el servidor local y no reportó errores de consola.
+Evidencia de cierre: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (6/6 pruebas). La prueba visual local confirmó edición y persistencia de una organización, un periodo y una observación después de recargar; no se reportaron errores ni advertencias de consola.

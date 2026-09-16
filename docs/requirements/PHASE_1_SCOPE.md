@@ -8,6 +8,7 @@
 - Registro manual y exportación CSV.
 - Importación XLSX/CSV con vista previa, detección de columnas, validación por fila, errores y confirmación explícita.
 - Persistencia local versionada mediante `localStorage` con manejo de memoria temporal si el navegador no está disponible.
+- Edición de organizaciones, periodos y observaciones existentes, con guardado inmediato y respaldo local.
 - Abstracción central `aiService` y endpoint `/api/ai` con modo MOCK por defecto.
 - Estructura inicial Electron sin lógica de negocio duplicada.
 

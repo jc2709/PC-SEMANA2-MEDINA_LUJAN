@@ -9,7 +9,7 @@ import { loadState, saveState } from "./services/storage/storage";
 import type { AppState, AppView, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
 import { formatCurrency, formatDate, formatNumber, makeId, todayInputValue } from "./utils/format";
 
-type Modal = "organization" | "period" | null;
+type Modal = "organization" | "edit-organization" | "period" | "edit-period" | "edit-observation" | null;
 
 const navigation: Array<{ id: AppView; label: string; icon: string; phase?: string }> = [
   { id: "dashboard", label: "Dashboard", icon: "⌂" },
@@ -61,6 +61,17 @@ export default function CanvasModelApp() {
   const [importing, setImporting] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState<AiResponse | null>(null);
+  const [editingOrganizationId, setEditingOrganizationId] = useState<string | null>(null);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [editingObservationId, setEditingObservationId] = useState<string | null>(null);
+
+  function commitState(update: (current: AppState) => AppState) {
+    setState((current) => {
+      const next = update(current);
+      saveState(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const result = loadState(createDemoState());
@@ -77,6 +88,17 @@ export default function CanvasModelApp() {
   }, [hydrated, state]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    const persistBeforeClose = () => saveState(state);
+    window.addEventListener("pagehide", persistBeforeClose);
+    window.addEventListener("beforeunload", persistBeforeClose);
+    return () => {
+      window.removeEventListener("pagehide", persistBeforeClose);
+      window.removeEventListener("beforeunload", persistBeforeClose);
+    };
+  }, [hydrated, state]);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 3600);
     return () => window.clearTimeout(timer);
@@ -87,6 +109,9 @@ export default function CanvasModelApp() {
   const activePeriod = organizationPeriods.find((item) => item.id === state.activePeriodId) ?? organizationPeriods[0];
   const activeObservations = useMemo(() => state.observations.filter((item) => item.organizationId === activeOrganization?.id && item.periodId === activePeriod?.id), [activeOrganization?.id, activePeriod?.id, state.observations]);
   const latestImport = state.imports[0];
+  const editingOrganization = state.organizations.find((item) => item.id === editingOrganizationId);
+  const editingPeriod = state.periods.find((item) => item.id === editingPeriodId);
+  const editingObservation = state.observations.find((item) => item.id === editingObservationId);
 
   function notify(message: string) {
     setToast(message);
@@ -99,11 +124,11 @@ export default function CanvasModelApp() {
 
   function chooseOrganization(organizationId: string) {
     const firstPeriod = state.periods.find((item) => item.organizationId === organizationId);
-    setState((current) => ({ ...current, activeOrganizationId: organizationId, activePeriodId: firstPeriod?.id ?? "" }));
+    commitState((current) => ({ ...current, activeOrganizationId: organizationId, activePeriodId: firstPeriod?.id ?? "" }));
   }
 
   function choosePeriod(periodId: string) {
-    setState((current) => ({ ...current, activePeriodId: periodId }));
+    commitState((current) => ({ ...current, activePeriodId: periodId }));
   }
 
   function handleOrganization(event: FormEvent<HTMLFormElement>) {
@@ -123,11 +148,27 @@ export default function CanvasModelApp() {
       size: String(data.get("size")) as OrganizationSize,
       currency: String(data.get("currency") || "PEN"),
       createdAt: new Date().toISOString(),
-      status: "ACTIVA",
+      status: String(data.get("status") || "ACTIVA") as Organization["status"],
     };
-    setState((current) => ({ ...current, organizations: [...current.organizations, organization], activeOrganizationId: organization.id, activePeriodId: "" }));
+    commitState((current) => ({ ...current, organizations: [...current.organizations, organization], activeOrganizationId: organization.id, activePeriodId: "" }));
     setModal(null);
     notify("Organización creada. Ahora agrega su primer periodo.");
+  }
+
+  function handleOrganizationEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingOrganizationId) return;
+    const data = new FormData(event.currentTarget);
+    const name = String(data.get("name") ?? "").trim();
+    const description = String(data.get("description") ?? "").trim();
+    if (!name || !description) {
+      notify("Completa el nombre y la descripción de la organización.");
+      return;
+    }
+    commitState((current) => ({ ...current, organizations: current.organizations.map((item) => item.id === editingOrganizationId ? { ...item, name, description, sector: String(data.get("sector")) as Sector, size: String(data.get("size")) as OrganizationSize, currency: String(data.get("currency") || "PEN"), status: String(data.get("status") || "ACTIVA") as Organization["status"] } : item) }));
+    setModal(null);
+    setEditingOrganizationId(null);
+    notify("Organización actualizada y guardada.");
   }
 
   function handlePeriod(event: FormEvent<HTMLFormElement>) {
@@ -150,9 +191,31 @@ export default function CanvasModelApp() {
       return;
     }
     const period: Period = { id: makeId("period"), organizationId: activeOrganization.id, code, label, startsOn, endsOn };
-    setState((current) => ({ ...current, periods: [...current.periods, period], activePeriodId: period.id }));
+    commitState((current) => ({ ...current, periods: [...current.periods, period], activePeriodId: period.id }));
     setModal(null);
     notify("Periodo creado y seleccionado.");
+  }
+
+  function handlePeriodEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingPeriodId || !activeOrganization) return;
+    const data = new FormData(event.currentTarget);
+    const code = String(data.get("code") ?? "").trim();
+    const label = String(data.get("label") ?? "").trim() || code;
+    const startsOn = String(data.get("startsOn") ?? "");
+    const endsOn = String(data.get("endsOn") ?? "");
+    if (!code || !startsOn || !endsOn || endsOn < startsOn) {
+      notify("Revisa el código y el rango de fechas del periodo.");
+      return;
+    }
+    if (organizationPeriods.some((item) => item.id !== editingPeriodId && item.code.toLowerCase() === code.toLowerCase())) {
+      notify("Ese periodo ya existe en la organización activa.");
+      return;
+    }
+    commitState((current) => ({ ...current, periods: current.periods.map((item) => item.id === editingPeriodId ? { ...item, code, label, startsOn, endsOn } : item) }));
+    setModal(null);
+    setEditingPeriodId(null);
+    notify("Periodo actualizado y guardado.");
   }
 
   function handleObservation(event: FormEvent<HTMLFormElement>) {
@@ -167,15 +230,37 @@ export default function CanvasModelApp() {
     const unit = String(data.get("unit") ?? "").trim();
     const source = String(data.get("source") ?? "").trim();
     const observedAt = String(data.get("observedAt") ?? "");
+    const periodId = String(data.get("periodId") || activePeriod.id);
     const quality = String(data.get("quality")) as DataQuality;
-    if (!kpi || !Number.isFinite(value) || !unit || !source || !observedAt) {
+    if (!kpi || !Number.isFinite(value) || !unit || !source || !observedAt || !organizationPeriods.some((item) => item.id === periodId)) {
       notify("Completa todos los campos de la observación.");
       return;
     }
-    const observation = { id: makeId("obs"), organizationId: activeOrganization.id, periodId: activePeriod.id, kpi, value, unit, source, quality, observedAt, createdAt: new Date().toISOString() };
-    setState((current) => ({ ...current, observations: [observation, ...current.observations] }));
+    const observation = { id: makeId("obs"), organizationId: activeOrganization.id, periodId, kpi, value, unit, source, quality, observedAt, createdAt: new Date().toISOString() };
+    commitState((current) => ({ ...current, observations: [observation, ...current.observations] }));
     event.currentTarget.reset();
     notify("Observación guardada localmente.");
+  }
+
+  function handleObservationEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingObservationId || !activeOrganization) return;
+    const data = new FormData(event.currentTarget);
+    const kpi = String(data.get("kpi") ?? "").trim();
+    const value = Number(data.get("value"));
+    const unit = String(data.get("unit") ?? "").trim();
+    const source = String(data.get("source") ?? "").trim();
+    const observedAt = String(data.get("observedAt") ?? "");
+    const quality = String(data.get("quality")) as DataQuality;
+    const periodId = String(data.get("periodId") ?? "");
+    if (!kpi || !Number.isFinite(value) || !unit || !source || !observedAt || !organizationPeriods.some((item) => item.id === periodId)) {
+      notify("Completa todos los campos de la observación.");
+      return;
+    }
+    commitState((current) => ({ ...current, observations: current.observations.map((item) => item.id === editingObservationId ? { ...item, periodId, kpi, value, unit, source, quality, observedAt } : item) }));
+    setModal(null);
+    setEditingObservationId(null);
+    notify("Observación actualizada y guardada.");
   }
 
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
@@ -214,7 +299,7 @@ export default function CanvasModelApp() {
       return [{ id: makeId("obs"), organizationId: activeOrganization.id, periodId, kpi: row.draft.kpi, value: row.draft.value, unit: row.draft.unit, source: row.draft.source, quality: row.draft.quality, observedAt: row.draft.observedAt, createdAt: new Date().toISOString() }];
     });
     const log = { id: makeId("import"), organizationId: activeOrganization.id, periodId: activePeriod?.id ?? "", fileName: importPreview.fileName, importedAt: new Date().toISOString(), processedRows: stats.processedRows, validRows: stats.validRows, invalidRows: stats.invalidRows, errors: importPreview.rows.flatMap((row) => row.errors), status: stats.invalidRows ? "COMPLETADO_CON_ERRORES" as const : "COMPLETADO" as const };
-    setState((current) => ({ ...current, observations: [...observations, ...current.observations], imports: [log, ...current.imports] }));
+    commitState((current) => ({ ...current, observations: [...observations, ...current.observations], imports: [log, ...current.imports] }));
     setImportPreview(null);
     notify(`Importación confirmada: ${stats.validRows} filas válidas.`);
   }
@@ -224,7 +309,7 @@ export default function CanvasModelApp() {
     setAiLoading(true);
     const response = await aiService.analizarCanvas({ organizationId: activeOrganization.id, context: { organization: activeOrganization, period: activePeriod, observations: activeObservations } });
     setLastAiResponse(response);
-    setState((current) => ({ ...current, aiHistory: [{ id: makeId("ai"), organizationId: activeOrganization.id, module: "Fase 1", operation: response.operation, logicalPrompt: "Analizar contexto ingresado por el usuario; sin buscadores.", model: response.mode === "MOCK" ? "MOCK" : "Gemini", response: JSON.stringify(response), decision: "PENDIENTE", createdAt: response.generatedAt }, ...current.aiHistory] }));
+    commitState((current) => ({ ...current, aiHistory: [{ id: makeId("ai"), organizationId: activeOrganization.id, module: "Fase 1", operation: response.operation, logicalPrompt: "Analizar contexto ingresado por el usuario; sin buscadores.", model: response.mode === "MOCK" ? "MOCK" : "Gemini", response: JSON.stringify(response), decision: "PENDIENTE", createdAt: response.generatedAt }, ...current.aiHistory] }));
     setAiLoading(false);
     notify(response.mode === "MOCK" ? "Modo demostración / MOCK: la aplicación local continúa operativa." : "Propuesta IA recibida para revisión.");
   }
@@ -274,16 +359,20 @@ export default function CanvasModelApp() {
 
         <div className="app-content">
           {view === "dashboard" && <DashboardView state={state} organization={activeOrganization} period={activePeriod} observations={activeObservations} latestImport={latestImport} navigate={navigate} onMockAi={runMockAssistant} aiLoading={aiLoading} lastAiResponse={lastAiResponse} />}
-          {view === "organization" && <OrganizationView state={state} organization={activeOrganization} periods={organizationPeriods} onOpenOrganization={() => setModal("organization")} onOpenPeriod={() => setModal("period")} onSelectOrganization={chooseOrganization} />}
-          {view === "data" && <DataView observations={activeObservations} period={activePeriod} onObservation={handleObservation} onImportFile={handleImportFile} onConfirmImport={confirmImport} importPreview={importPreview} importing={importing} onExport={exportObservations} />}
+          {view === "organization" && <OrganizationView state={state} organization={activeOrganization} periods={organizationPeriods} onOpenOrganization={() => setModal("organization")} onOpenPeriod={() => setModal("period")} onEditOrganization={(id) => { setEditingOrganizationId(id); setModal("edit-organization"); }} onEditPeriod={(id) => { setEditingPeriodId(id); setModal("edit-period"); }} onSelectOrganization={chooseOrganization} />}
+          {view === "data" && <DataView observations={activeObservations} period={activePeriod} periods={organizationPeriods} onObservation={handleObservation} onEditObservation={(id) => { setEditingObservationId(id); setModal("edit-observation"); }} onImportFile={handleImportFile} onConfirmImport={confirmImport} importPreview={importPreview} importing={importing} onExport={exportObservations} />}
           {view === "ai-history" && <AiHistoryView entries={state.aiHistory} organization={activeOrganization} />}
           {view === "configuration" && <ConfigurationView storageAvailable={storageAvailable} persisted={storageAvailable && hydrated} onMockAi={runMockAssistant} aiLoading={aiLoading} />}
           {!(["dashboard", "organization", "data", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
         </div>
       </section>
 
-      {modal && <Modal title={modal === "organization" ? "Nueva organización" : "Nuevo periodo"} onClose={() => setModal(null)}>
-        {modal === "organization" ? <OrganizationForm onSubmit={handleOrganization} /> : <PeriodForm onSubmit={handlePeriod} />}
+      {modal && <Modal title={modal === "organization" ? "Nueva organización" : modal === "edit-organization" ? "Editar organización" : modal === "period" ? "Nuevo periodo" : modal === "edit-period" ? "Editar periodo" : "Editar observación"} onClose={() => { setModal(null); setEditingOrganizationId(null); setEditingPeriodId(null); setEditingObservationId(null); }}>
+        {modal === "organization" && <OrganizationForm onSubmit={handleOrganization} onCancel={() => setModal(null)} submitLabel="Crear organización" />}
+        {modal === "edit-organization" && editingOrganization && <OrganizationForm initial={editingOrganization} onSubmit={handleOrganizationEdit} onCancel={() => setModal(null)} submitLabel="Guardar cambios" />}
+        {modal === "period" && <PeriodForm onSubmit={handlePeriod} onCancel={() => setModal(null)} submitLabel="Crear periodo" />}
+        {modal === "edit-period" && editingPeriod && <PeriodForm initial={editingPeriod} onSubmit={handlePeriodEdit} onCancel={() => setModal(null)} submitLabel="Guardar cambios" />}
+        {modal === "edit-observation" && editingObservation && <ObservationForm initial={editingObservation} periods={organizationPeriods} onSubmit={handleObservationEdit} onCancel={() => setModal(null)} submitLabel="Guardar cambios" />}
       </Modal>}
       {toast && <div className="toast-message" role="status"><span>✓</span>{toast}</div>}
     </main>
@@ -311,25 +400,26 @@ function DashboardView({ state, organization, period, observations, latestImport
   </>;
 }
 
-function OrganizationView({ state, organization, periods, onOpenOrganization, onOpenPeriod, onSelectOrganization }: { state: AppState; organization?: Organization; periods: Period[]; onOpenOrganization: () => void; onOpenPeriod: () => void; onSelectOrganization: (id: string) => void }) {
-  return <div className="organization-layout"><section className="panel"><PanelHeading title="Organizaciones" description={`${state.organizations.length} contexto${state.organizations.length === 1 ? "" : "s"} disponible${state.organizations.length === 1 ? "" : "s"}`}><button className="primary-button" onClick={onOpenOrganization}>＋ Nueva organización</button></PanelHeading><div className="organization-list">{state.organizations.map((item) => <button key={item.id} className={`organization-card ${item.id === organization?.id ? "selected" : ""}`} onClick={() => onSelectOrganization(item.id)}><span className="org-monogram">{item.name.slice(0, 2).toUpperCase()}</span><div><strong>{item.name}</strong><small>{sectorLabels[item.sector]} · {sizeLabels[item.size]} · {item.currency}</small></div><span className="org-status">{item.status}</span></button>)}</div></section><section className="panel period-panel"><PanelHeading title="Periodos de la organización activa" description={organization ? organization.name : "Selecciona una organización"}><button className="outline-button" onClick={onOpenPeriod} disabled={!organization}>＋ Agregar periodo</button></PanelHeading>{periods.length ? <div className="period-list">{periods.map((period) => <div className="period-row" key={period.id}><span className="period-icon">◷</span><div><strong>{period.label}</strong><small>{period.code} · {period.startsOn} → {period.endsOn}</small></div><span className="period-check">✓ Aislado</span></div>)}</div> : <EmptyState title="No hay periodos" description="Agrega el primer periodo para poder cargar datos." action="Crear periodo" onAction={onOpenPeriod} />}</section><section className="context-note"><span className="note-icon">i</span><div><strong>Regla de aislamiento</strong><p>Los datos siempre se guardan con organización y periodo. Cambiar de contexto no mezcla observaciones ni archivos importados.</p></div></section></div>;
+function OrganizationView({ state, organization, periods, onOpenOrganization, onOpenPeriod, onEditOrganization, onEditPeriod, onSelectOrganization }: { state: AppState; organization?: Organization; periods: Period[]; onOpenOrganization: () => void; onOpenPeriod: () => void; onEditOrganization: (id: string) => void; onEditPeriod: (id: string) => void; onSelectOrganization: (id: string) => void }) {
+  return <div className="organization-layout"><section className="panel"><PanelHeading title="Organizaciones" description={`${state.organizations.length} contexto${state.organizations.length === 1 ? "" : "s"} disponible${state.organizations.length === 1 ? "" : "s"}`}><button className="primary-button" onClick={onOpenOrganization}>＋ Nueva organización</button></PanelHeading><div className="organization-list">{state.organizations.map((item) => <div className={`organization-card-wrap ${item.id === organization?.id ? "selected" : ""}`} key={item.id}><button className="organization-card" onClick={() => onSelectOrganization(item.id)}><span className="org-monogram">{item.name.slice(0, 2).toUpperCase()}</span><div><strong>{item.name}</strong><small>{sectorLabels[item.sector]} · {sizeLabels[item.size]} · {item.currency}</small></div><span className="org-status">{item.status}</span></button><button className="row-edit" onClick={() => onEditOrganization(item.id)}>Editar</button></div>)}</div></section><section className="panel period-panel"><PanelHeading title="Periodos de la organización activa" description={organization ? organization.name : "Selecciona una organización"}><button className="outline-button" onClick={onOpenPeriod} disabled={!organization}>＋ Agregar periodo</button></PanelHeading>{periods.length ? <div className="period-list">{periods.map((period) => <div className="period-row" key={period.id}><span className="period-icon">◷</span><div><strong>{period.label}</strong><small>{period.code} · {period.startsOn} → {period.endsOn}</small></div><span className="period-check">✓ Aislado</span><button className="row-edit" onClick={() => onEditPeriod(period.id)}>Editar</button></div>)}</div> : <EmptyState title="No hay periodos" description="Agrega el primer periodo para poder cargar datos." action="Crear periodo" onAction={onOpenPeriod} />}</section><section className="context-note"><span className="note-icon">i</span><div><strong>Regla de aislamiento</strong><p>Los datos siempre se guardan con organización y periodo. Cambiar de contexto no mezcla observaciones ni archivos importados.</p></div></section></div>;
 }
 
-function DataView({ observations, period, onObservation, onImportFile, onConfirmImport, importPreview, importing, onExport }: { observations: AppState["observations"]; period?: Period; onObservation: (event: FormEvent<HTMLFormElement>) => void; onImportFile: (event: ChangeEvent<HTMLInputElement>) => void; onConfirmImport: () => void; importPreview: ImportPreview | null; importing: boolean; onExport: () => void }) {
+function DataView({ observations, period, periods, onObservation, onEditObservation, onImportFile, onConfirmImport, importPreview, importing, onExport }: { observations: AppState["observations"]; period?: Period; periods: Period[]; onObservation: (event: FormEvent<HTMLFormElement>) => void; onEditObservation: (id: string) => void; onImportFile: (event: ChangeEvent<HTMLInputElement>) => void; onConfirmImport: () => void; importPreview: ImportPreview | null; importing: boolean; onExport: () => void }) {
   const stats = importPreview ? previewStats(importPreview) : null;
-  return <div className="data-layout"><section className="data-entry-grid"><div className="panel form-panel"><PanelHeading title="Registro manual" description="Una observación por KPI y periodo." /><ObservationForm onSubmit={onObservation} period={period} /></div><div className="panel import-panel"><PanelHeading title="Importar datos" description="XLSX o CSV con vista previa y validación." /><label className="drop-zone"><input type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onImportFile} disabled={importing} /><span className="upload-icon">↑</span><strong>{importing ? "Leyendo archivo…" : "Selecciona un archivo XLSX o CSV"}</strong><small>Columnas detectadas: KPI, Periodo, Valor, Unidad, Fuente, Calidad, Fecha</small></label>{importPreview && stats && <div className="import-preview"><div className="preview-header"><div><strong>{importPreview.fileName}</strong><small>{importPreview.headers.length} columnas detectadas</small></div><div className="preview-counts"><span className="valid">{stats.validRows} válidas</span><span className="invalid">{stats.invalidRows} inválidas</span></div></div><div className="preview-table"><table><thead><tr><th>FILA</th><th>KPI</th><th>PERIODO</th><th>VALOR</th><th>ESTADO</th></tr></thead><tbody>{importPreview.rows.slice(0, 8).map((row) => <tr key={row.sourceRow}><td>{row.sourceRow}</td><td>{row.draft?.kpi ?? String(row.raw.KPI ?? row.raw.kpi ?? "—")}</td><td>{row.draft?.periodCode ?? "—"}</td><td>{row.draft?.value ?? "—"}</td><td>{row.errors.length ? <span className="status-tag danger">{row.errors[0].message}</span> : <span className="status-tag success">Válida</span>}</td></tr>)}</tbody></table></div><button className="primary-button full" onClick={onConfirmImport} disabled={stats.validRows === 0}>Confirmar importación ({stats.validRows})</button></div>}</div></section><section className="panel"><PanelHeading title="Histórico del periodo" description={period ? `${period.label} · los registros proceden del mismo almacenamiento` : "Selecciona un periodo"}><button className="outline-button" onClick={onExport} disabled={!observations.length}>↓ Exportar CSV</button></PanelHeading>{observations.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>KPI</th><th>VALOR</th><th>UNIDAD</th><th>FUENTE</th><th>CALIDAD</th><th>FECHA</th></tr></thead><tbody>{observations.map((item) => <ObservationRow key={item.id} observation={item} table />)}</tbody></table></div> : <EmptyState title="Periodo sin observaciones" description="Los datos que registres aquí quedarán persistidos localmente." />}</section></div>;
+  return <div className="data-layout"><section className="data-entry-grid"><div className="panel form-panel"><PanelHeading title="Registro manual" description="Una observación por KPI y periodo." /><ObservationForm onSubmit={onObservation} period={period} periods={periods} /></div><div className="panel import-panel"><PanelHeading title="Importar datos" description="XLSX o CSV con vista previa y validación." /><label className="drop-zone"><input type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onImportFile} disabled={importing} /><span className="upload-icon">↑</span><strong>{importing ? "Leyendo archivo…" : "Selecciona un archivo XLSX o CSV"}</strong><small>Columnas detectadas: KPI, Periodo, Valor, Unidad, Fuente, Calidad, Fecha</small></label>{importPreview && stats && <div className="import-preview"><div className="preview-header"><div><strong>{importPreview.fileName}</strong><small>{importPreview.headers.length} columnas detectadas</small></div><div className="preview-counts"><span className="valid">{stats.validRows} válidas</span><span className="invalid">{stats.invalidRows} inválidas</span></div></div><div className="preview-table"><table><thead><tr><th>FILA</th><th>KPI</th><th>PERIODO</th><th>VALOR</th><th>ESTADO</th></tr></thead><tbody>{importPreview.rows.slice(0, 8).map((row) => <tr key={row.sourceRow}><td>{row.sourceRow}</td><td>{row.draft?.kpi ?? String(row.raw.KPI ?? row.raw.kpi ?? "—")}</td><td>{row.draft?.periodCode ?? "—"}</td><td>{row.draft?.value ?? "—"}</td><td>{row.errors.length ? <span className="status-tag danger">{row.errors[0].message}</span> : <span className="status-tag success">Válida</span>}</td></tr>)}</tbody></table></div><button className="primary-button full" onClick={onConfirmImport} disabled={stats.validRows === 0}>Confirmar importación ({stats.validRows})</button></div>}</div></section><section className="panel"><PanelHeading title="Histórico del periodo" description={period ? `${period.label} · los registros proceden del mismo almacenamiento` : "Selecciona un periodo"}><button className="outline-button" onClick={onExport} disabled={!observations.length}>↓ Exportar CSV</button></PanelHeading>{observations.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>KPI</th><th>VALOR</th><th>UNIDAD</th><th>FUENTE</th><th>CALIDAD</th><th>FECHA</th><th>ACCIÓN</th></tr></thead><tbody>{observations.map((item) => <ObservationRow key={item.id} observation={item} table onEdit={() => onEditObservation(item.id)} />)}</tbody></table></div> : <EmptyState title="Periodo sin observaciones" description="Los datos que registres aquí quedarán persistidos localmente." />}</section></div>;
 }
 
-function ObservationForm({ onSubmit, period }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; period?: Period }) {
-  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>KPI</span><input name="kpi" required placeholder="Ej. Ventas" /></label><div className="form-two"><label className="field"><span>Valor</span><input name="value" required type="number" step="any" placeholder="0" /></label><label className="field"><span>Unidad</span><input name="unit" required placeholder="PEN, %, clientes…" /></label></div><label className="field"><span>Fuente</span><input name="source" required placeholder="Sistema comercial, encuesta…" /></label><div className="form-two"><label className="field"><span>Calidad</span><select name="quality" defaultValue="MEDIA"><option value="ALTA">Alta</option><option value="MEDIA">Media</option><option value="BAJA">Baja</option></select></label><label className="field"><span>Fecha de observación</span><input name="observedAt" required type="date" defaultValue={todayInputValue()} /></label></div><div className="form-context"><span>PERIODO ACTIVO</span><strong>{period?.label ?? "Sin periodo"}</strong></div><button className="primary-button full" type="submit" disabled={!period}>Guardar observación</button></form>;
+function ObservationForm({ onSubmit, period, periods, initial, onCancel, submitLabel = "Guardar observación" }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; period?: Period; periods: Period[]; initial?: AppState["observations"][number]; onCancel?: () => void; submitLabel?: string }) {
+  const selectedPeriod = periods.find((item) => item.id === initial?.periodId) ?? period;
+  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>KPI</span><input name="kpi" required placeholder="Ej. Ventas" defaultValue={initial?.kpi ?? ""} /></label><div className="form-two"><label className="field"><span>Valor</span><input name="value" required type="number" step="any" placeholder="0" defaultValue={initial?.value ?? ""} /></label><label className="field"><span>Unidad</span><input name="unit" required placeholder="PEN, %, clientes…" defaultValue={initial?.unit ?? ""} /></label></div><label className="field"><span>Fuente</span><input name="source" required placeholder="Sistema comercial, encuesta…" defaultValue={initial?.source ?? ""} /></label><div className="form-two"><label className="field"><span>Calidad</span><select name="quality" defaultValue={initial?.quality ?? "MEDIA"}><option value="ALTA">Alta</option><option value="MEDIA">Media</option><option value="BAJA">Baja</option></select></label><label className="field"><span>Fecha de observación</span><input name="observedAt" required type="date" defaultValue={initial?.observedAt ?? todayInputValue()} /></label></div><label className="field"><span>Periodo asociado</span><select name="periodId" required defaultValue={selectedPeriod?.id ?? ""}><option value="">Selecciona un periodo</option>{periods.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.code}</option>)}</select></label><div className="modal-actions">{onCancel && <button type="button" className="outline-button" onClick={onCancel}>Cancelar</button>}<button className="primary-button" type="submit" disabled={!periods.length}>{submitLabel}</button></div></form>;
 }
 
-function OrganizationForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>Nombre legal o comercial</span><input name="name" required placeholder="Ej. Comercial Andina S.A.C." /></label><div className="form-two"><label className="field"><span>Sector</span><select name="sector" defaultValue="comercial"><option value="industrial">Industrial</option><option value="comercial">Comercial</option><option value="servicios">Servicios</option></select></label><label className="field"><span>Tamaño</span><select name="size" defaultValue="mediana"><option value="micro">Micro</option><option value="pequena">Pequeña</option><option value="mediana">Mediana</option><option value="grande">Grande</option></select></label></div><div className="form-two"><label className="field"><span>Moneda</span><select name="currency" defaultValue="PEN"><option value="PEN">PEN · Sol peruano</option><option value="USD">USD · Dólar</option><option value="EUR">EUR · Euro</option></select></label><span /></div><label className="field"><span>Descripción</span><textarea name="description" required rows={3} placeholder="Describe brevemente la organización y su actividad." /></label><div className="modal-actions"><button type="button" className="outline-button" onClick={(event) => event.currentTarget.closest(".modal-backdrop")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))}>Cancelar</button><button className="primary-button" type="submit">Crear organización</button></div></form>;
+function OrganizationForm({ onSubmit, initial, onCancel, submitLabel }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; initial?: Organization; onCancel: () => void; submitLabel: string }) {
+  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>Nombre legal o comercial</span><input name="name" required placeholder="Ej. Comercial Andina S.A.C." defaultValue={initial?.name ?? ""} /></label><div className="form-two"><label className="field"><span>Sector</span><select name="sector" defaultValue={initial?.sector ?? "comercial"}><option value="industrial">Industrial</option><option value="comercial">Comercial</option><option value="servicios">Servicios</option></select></label><label className="field"><span>Tamaño</span><select name="size" defaultValue={initial?.size ?? "mediana"}><option value="micro">Micro</option><option value="pequena">Pequeña</option><option value="mediana">Mediana</option><option value="grande">Grande</option></select></label></div><div className="form-two"><label className="field"><span>Moneda</span><select name="currency" defaultValue={initial?.currency ?? "PEN"}><option value="PEN">PEN · Sol peruano</option><option value="USD">USD · Dólar</option><option value="EUR">EUR · Euro</option></select></label><label className="field"><span>Estado</span><select name="status" defaultValue={initial?.status ?? "ACTIVA"}><option value="ACTIVA">Activa</option><option value="INACTIVA">Inactiva</option></select></label></div><label className="field"><span>Descripción</span><textarea name="description" required rows={3} placeholder="Describe brevemente la organización y su actividad." defaultValue={initial?.description ?? ""} /></label><div className="modal-actions"><button type="button" className="outline-button" onClick={onCancel}>Cancelar</button><button className="primary-button" type="submit">{submitLabel}</button></div></form>;
 }
 
-function PeriodForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>Código de periodo</span><input name="code" required placeholder="2026-11 o 2026-Q4" /></label><label className="field"><span>Nombre visible</span><input name="label" placeholder="Noviembre 2026" /></label><div className="form-two"><label className="field"><span>Inicio</span><input name="startsOn" required type="date" /></label><label className="field"><span>Fin</span><input name="endsOn" required type="date" /></label></div><div className="modal-actions"><button type="button" className="outline-button" onClick={(event) => event.currentTarget.closest(".modal-backdrop")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))}>Cancelar</button><button className="primary-button" type="submit">Crear periodo</button></div></form>;
+function PeriodForm({ onSubmit, initial, onCancel, submitLabel }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; initial?: Period; onCancel: () => void; submitLabel: string }) {
+  return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>Código de periodo</span><input name="code" required placeholder="2026-11 o 2026-Q4" defaultValue={initial?.code ?? ""} /></label><label className="field"><span>Nombre visible</span><input name="label" placeholder="Noviembre 2026" defaultValue={initial?.label ?? ""} /></label><div className="form-two"><label className="field"><span>Inicio</span><input name="startsOn" required type="date" defaultValue={initial?.startsOn ?? ""} /></label><label className="field"><span>Fin</span><input name="endsOn" required type="date" defaultValue={initial?.endsOn ?? ""} /></label></div><div className="modal-actions"><button type="button" className="outline-button" onClick={onCancel}>Cancelar</button><button className="primary-button" type="submit">{submitLabel}</button></div></form>;
 }
 
 function AiHistoryView({ entries, organization }: { entries: AppState["aiHistory"]; organization?: Organization }) {
@@ -338,7 +428,7 @@ function AiHistoryView({ entries, organization }: { entries: AppState["aiHistory
 }
 
 function ConfigurationView({ storageAvailable, persisted, onMockAi, aiLoading }: { storageAvailable: boolean; persisted: boolean; onMockAi: () => void; aiLoading: boolean }) {
-  return <div className="configuration-grid"><section className="panel"><PanelHeading title="Estado de ejecución" description="Indicadores técnicos visibles para la demostración." /><div className="config-list"><ConfigRow label="Persistencia local" value={storageAvailable ? "Disponible" : "No disponible"} state={storageAvailable ? "success" : "warning"} detail="localStorage con snapshot versionado" /><ConfigRow label="Estado actual" value={persisted ? "Guardado" : "En memoria"} state={persisted ? "success" : "warning"} detail="Se rehidrata al abrir la aplicación" /><ConfigRow label="Operación offline" value="Activa" state="success" detail="Organizaciones, periodos y datos no dependen de red" /><ConfigRow label="Clave Gemini" value="Solo servidor" state="neutral" detail="Nunca se incluye en frontend, Electron o Git" /></div></section><section className="panel architecture-panel"><PanelHeading title="Servicio IA" description="Una única abstracción centralizada." /><div className="service-diagram"><span>UI React</span><b>→</b><span>aiService</span><b>→</b><span>/api/ai</span></div><p>Si no existe <code>GEMINI_API_KEY</code>, el endpoint responde claramente en modo MOCK y la operación local continúa.</p><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Probando…" : "Ejecutar prueba MOCK"}</button></section><section className="decision-card"><span className="eyebrow light">DECISIÓN DE ARQUITECTURA</span><h3>Una sola aplicación para web y escritorio.</h3><p>La lógica vive en <code>src/</code>. Vite/vinext entrega la versión web y el contenedor Electron cargará el mismo build en la Fase 7.</p></section></div>;
+  return <div className="configuration-grid"><section className="panel"><PanelHeading title="Estado de ejecución" description="Indicadores técnicos visibles para la demostración." /><div className="config-list"><ConfigRow label="Persistencia local" value={storageAvailable ? "Disponible" : "No disponible"} state={storageAvailable ? "success" : "warning"} detail="Snapshot primario + respaldo local" /><ConfigRow label="Estado actual" value={persisted ? "Guardado" : "En memoria"} state={persisted ? "success" : "warning"} detail="Guardado inmediato y también al cerrar la pestaña" /><ConfigRow label="Operación offline" value="Activa" state="success" detail="Organizaciones, periodos y datos no dependen de red" /><ConfigRow label="Clave Gemini" value="Solo servidor" state="neutral" detail="Nunca se incluye en frontend, Electron o Git" /></div></section><section className="panel architecture-panel"><PanelHeading title="Servicio IA" description="Una única abstracción centralizada." /><div className="service-diagram"><span>UI React</span><b>→</b><span>aiService</span><b>→</b><span>/api/ai</span></div><p>Si no existe <code>GEMINI_API_KEY</code>, el endpoint responde claramente en modo MOCK y la operación local continúa.</p><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Probando…" : "Ejecutar prueba MOCK"}</button></section><section className="decision-card"><span className="eyebrow light">DECISIÓN DE ARQUITECTURA</span><h3>Una sola aplicación para web y escritorio.</h3><p>La lógica vive en <code>src/</code>. Vite/vinext entrega la versión web y el contenedor Electron cargará el mismo build en la Fase 7.</p></section></div>;
 }
 
 function FutureModuleView({ meta }: { meta: { eyebrow: string; title: string; description: string } }) {
@@ -357,8 +447,8 @@ function MetricCard({ label, value, detail, icon, tone }: { label: string; value
   return <article className="metric-card"><span className={`metric-icon ${tone}`}>{icon}</span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></article>;
 }
 
-function ObservationRow({ observation, table = false }: { observation: AppState["observations"][number]; table?: boolean }) {
-  if (table) return <tr><td><strong className="table-primary">{observation.kpi}</strong></td><td><strong className="table-value">{formatNumber(observation.value)}</strong></td><td>{observation.unit}</td><td>{observation.source}</td><td><span className={`quality-tag ${observation.quality.toLowerCase()}`}>{observation.quality}</span></td><td>{observation.observedAt}</td></tr>;
+function ObservationRow({ observation, table = false, onEdit }: { observation: AppState["observations"][number]; table?: boolean; onEdit?: () => void }) {
+  if (table) return <tr><td><strong className="table-primary">{observation.kpi}</strong></td><td><strong className="table-value">{formatNumber(observation.value)}</strong></td><td>{observation.unit}</td><td>{observation.source}</td><td><span className={`quality-tag ${observation.quality.toLowerCase()}`}>{observation.quality}</span></td><td>{observation.observedAt}</td><td>{onEdit && <button className="row-edit" onClick={onEdit}>Editar</button>}</td></tr>;
   return <div className="observation-row"><span className="observation-mark">◈</span><div><strong>{observation.kpi}</strong><small>{observation.source} · {observation.observedAt}</small></div><b>{formatNumber(observation.value)} <em>{observation.unit}</em></b></div>;
 }
 

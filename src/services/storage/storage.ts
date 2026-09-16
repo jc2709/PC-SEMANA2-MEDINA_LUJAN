@@ -1,6 +1,7 @@
 import type { AppState } from "../../types/domain";
 
 export const STORAGE_KEY = "canvas-model-ia-state-v1";
+export const STORAGE_BACKUP_KEY = "canvas-model-ia-state-v1-backup";
 
 export type StorageLoadResult = {
   state: AppState;
@@ -25,15 +26,34 @@ function isAppState(value: unknown): value is AppState {
     && typeof candidate.activePeriodId === "string";
 }
 
+type StoredSnapshot = { state: AppState; savedAt: string };
+
+function parseSnapshot(raw: string | null): StoredSnapshot | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (isAppState(parsed)) return { state: parsed, savedAt: "1970-01-01T00:00:00.000Z" };
+    if (!parsed || typeof parsed !== "object" || !("state" in parsed)) return null;
+    const envelope = parsed as { state?: unknown; savedAt?: unknown };
+    return isAppState(envelope.state)
+      ? { state: envelope.state, savedAt: typeof envelope.savedAt === "string" ? envelope.savedAt : "1970-01-01T00:00:00.000Z" }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadState(fallback: AppState): StorageLoadResult {
   if (!hasStorage()) return { state: fallback, persisted: false, available: false };
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { state: fallback, persisted: false, available: true };
-    const parsed: unknown = JSON.parse(raw);
-    return isAppState(parsed)
-      ? { state: parsed, persisted: true, available: true }
+    const primary = parseSnapshot(window.localStorage.getItem(STORAGE_KEY));
+    const backup = parseSnapshot(window.localStorage.getItem(STORAGE_BACKUP_KEY));
+    const selected = primary && backup
+      ? (primary.savedAt >= backup.savedAt ? primary : backup)
+      : primary ?? backup;
+    return selected
+      ? { state: selected.state, persisted: true, available: true }
       : { state: fallback, persisted: false, available: true };
   } catch {
     return { state: fallback, persisted: false, available: false };
@@ -42,11 +62,18 @@ export function loadState(fallback: AppState): StorageLoadResult {
 
 export function saveState(state: AppState): boolean {
   if (!hasStorage()) return false;
+  const snapshot = JSON.stringify({ state, savedAt: new Date().toISOString() } satisfies StoredSnapshot);
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(STORAGE_KEY, snapshot);
+    window.localStorage.setItem(STORAGE_BACKUP_KEY, snapshot);
     return true;
   } catch {
-    return false;
+    try {
+      window.localStorage.setItem(STORAGE_BACKUP_KEY, snapshot);
+      return false;
+    } catch {
+      return false;
+    }
   }
 }
 

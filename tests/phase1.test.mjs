@@ -15,6 +15,22 @@ test("el estado demo tiene organización, periodos y datos aislados", async () =
   assert.notDeepEqual(september.map((item) => item.id), october.map((item) => item.id));
 });
 
+test("la persistencia guarda respaldo y recupera si el snapshot principal se corrompe", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const { loadState, saveState, STORAGE_KEY, STORAGE_BACKUP_KEY } = await import(new URL("../src/services/storage/storage.ts", import.meta.url).href);
+  const records = new Map();
+  globalThis.window = { localStorage: { getItem: (key) => records.get(key) ?? null, setItem: (key, value) => records.set(key, value), removeItem: (key) => records.delete(key) } };
+  const state = createDemoState();
+  state.observations = [{ ...state.observations[0], kpi: "Dato persistente" }, ...state.observations.slice(1)];
+  assert.equal(saveState(state), true);
+  assert.ok(records.has(STORAGE_KEY) && records.has(STORAGE_BACKUP_KEY));
+  records.set(STORAGE_KEY, "{snapshot incompleto");
+  const restored = loadState(createDemoState());
+  assert.equal(restored.persisted, true);
+  assert.equal(restored.state.observations[0].kpi, "Dato persistente");
+  delete globalThis.window;
+});
+
 test("la importación CSV valida filas y reconoce columnas del dataset", async () => {
   const { parseDataFile, previewStats } = await import(new URL("../src/services/import/importService.ts", import.meta.url).href);
   const file = new File([
