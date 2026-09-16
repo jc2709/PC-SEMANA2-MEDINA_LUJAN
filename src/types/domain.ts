@@ -10,6 +10,11 @@ export type ProjectStatus = "NO_INICIADO" | "EN_CURSO" | "EN_RIESGO" | "RETRASAD
 export type ProjectPriority = "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
 export type ProjectTaskStatus = "PENDIENTE" | "EN_CURSO" | "BLOQUEADA" | "COMPLETADA";
 export type ProjectMilestoneStatus = "PENDIENTE" | "ALCANZADO" | "ATRASADO";
+export type KpiPeriodicity = "DIARIA" | "SEMANAL" | "MENSUAL";
+export type KpiDirection = "MAYOR_MEJOR" | "MENOR_MEJOR";
+export type ForecastModel = "NAIVE" | "MEDIA_MOVIL" | "TENDENCIA_LINEAL" | "SUAVIZACION_EXPONENCIAL";
+export type ForecastQuality = "SUFICIENTE" | "INSUFICIENTE";
+export type SimulationType = "CONSERVADOR" | "MODERADO" | "AGRESIVO" | "PERSONALIZADO";
 export type CanvasBlockKey =
   | "customer-segments"
   | "value-propositions"
@@ -206,8 +211,67 @@ export interface ProjectTrackingEntry {
   createdAt: string;
 }
 
+export interface KpiDefinition {
+  id: string;
+  organizationId: string;
+  name: string;
+  description: string;
+  formula: string;
+  unit: string;
+  periodicity: KpiPeriodicity;
+  baseline: number;
+  target: number;
+  tolerance: number;
+  responsible: string;
+  source: string;
+  direction: KpiDirection;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KpiForecast {
+  id: string;
+  organizationId: string;
+  periodId: string;
+  kpiDefinitionId: string;
+  model: ForecastModel;
+  parameters: string;
+  metricName: string;
+  metricValue: number | null;
+  cutoffDate: string;
+  nextPeriodLabel: string;
+  prediction: number;
+  lowerBound: number;
+  upperBound: number;
+  trendPercent: number | null;
+  observationCount: number;
+  quality: ForecastQuality;
+  explanation: string;
+  createdAt: string;
+}
+
+export interface SimulationVariables {
+  marketing: number;
+  conversion: number;
+  price: number;
+  costs: number;
+  projectDelay: number;
+  capacity: number;
+}
+
+export interface SimulationScenario {
+  id: string;
+  organizationId: string;
+  periodId: string;
+  name: string;
+  type: SimulationType;
+  variables: SimulationVariables;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppState {
-  schemaVersion: 3;
+  schemaVersion: 4;
   organizations: Organization[];
   periods: Period[];
   observations: HistoricalObservation[];
@@ -219,6 +283,9 @@ export interface AppState {
   projectTasks: ProjectTask[];
   projectMilestones: ProjectMilestone[];
   projectTracking: ProjectTrackingEntry[];
+  kpiDefinitions: KpiDefinition[];
+  forecasts: KpiForecast[];
+  simulations: SimulationScenario[];
   activeOrganizationId: string;
   activePeriodId: string;
 }

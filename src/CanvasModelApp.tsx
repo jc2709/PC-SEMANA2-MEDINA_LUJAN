@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { createDemoState } from "./data/demoData";
+import { createDemoState, DEMO_KPI_DEFINITIONS } from "./data/demoData";
 import { aiService } from "./services/ai/aiService";
 import { buildToBeFromAi, type AiDecision, type AiElementProposal, type AiOperation, type AiResponse } from "./services/ai/aiModel";
 import { parseDataFile, previewStats, type ImportPreview } from "./services/import/importService";
@@ -11,7 +11,10 @@ import { CanvasComparisonView, CanvasEditorView, type CanvasElementDraft, type C
 import { AiAnalysisView } from "./modules/ai/AiModule";
 import { GanttView, ProjectsView, TrackingView, type ProjectDraft, type ProjectMilestoneDraft, type ProjectTaskDraft, type ProjectTrackingDraft } from "./modules/execution/ExecutionModule";
 import { DemoFillButton } from "./components/DemoFillButton";
-import type { AppState, AppView, CanvasKind, CanvasStatus, CanvasVersion, DataQuality, Organization, OrganizationSize, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry, Sector } from "./types/domain";
+import { DashboardAnalyticsView, KpiView, PredictionView, SimulationView, type KpiDraft, type SimulationDraft } from "./modules/analytics/AnalyticsModule";
+import { ReportsView } from "./modules/reports/ReportsModule";
+import { buildForecast } from "./services/analytics/analyticsService";
+import type { AppState, AppView, CanvasKind, CanvasStatus, CanvasVersion, DataQuality, KpiDefinition, Organization, OrganizationSize, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry, Sector, SimulationScenario } from "./types/domain";
 import { formatCurrency, formatDate, formatNumber, makeId, todayInputValue } from "./utils/format";
 
 type Modal = "organization" | "edit-organization" | "period" | "edit-period" | "edit-observation" | null;
@@ -45,10 +48,10 @@ const viewMeta: Record<AppView, { eyebrow: string; title: string; description: s
   projects: { eyebrow: "EJECUCIÓN / CAMBIOS", title: "Proyectos", description: "Convierte las brechas del Canvas TO BE en iniciativas aprobables y trazables." },
   gantt: { eyebrow: "EJECUCIÓN / PLAN", title: "Gantt", description: "Calendariza actividades, dependencias y hitos para ejecutar el cambio." },
   tracking: { eyebrow: "EJECUCIÓN / CONTROL", title: "Seguimiento", description: "Compara avance y costos reales frente al plan, con riesgos y evidencia." },
-  kpi: { eyebrow: "ANALÍTICA / INDICADORES", title: "KPI", description: "La definición de indicadores se habilitará en la Fase 5." },
-  prediction: { eyebrow: "ANALÍTICA / PRONÓSTICO", title: "Predicción", description: "El motor predictivo local se habilitará en la Fase 5." },
-  simulation: { eyebrow: "ANALÍTICA / ESCENARIOS", title: "Simulación", description: "El simulador se habilitará en la Fase 5." },
-  reports: { eyebrow: "SALIDAS / EVIDENCIA", title: "Reportes", description: "Los reportes y exportaciones se habilitarán en la Fase 6." },
+  kpi: { eyebrow: "ANALÍTICA / INDICADORES", title: "KPI", description: "Define indicadores medibles y conecta sus metas con el histórico." },
+  prediction: { eyebrow: "ANALÍTICA / PRONÓSTICO", title: "Predicción", description: "Calcula el siguiente periodo con modelos locales transparentes." },
+  simulation: { eyebrow: "ANALÍTICA / ESCENARIOS", title: "Simulación", description: "Compara la base contra cambios de marketing, conversión, costos y capacidad." },
+  reports: { eyebrow: "SALIDAS / EVIDENCIA", title: "Reportes", description: "Exporta el contexto activo a CSV, Excel y PowerPoint." },
   "ai-analysis": { eyebrow: "IA / PROPUESTAS", title: "Análisis IA", description: "Analiza el AS IS y revisa propuestas TO BE antes de aplicarlas." },
   "ai-history": { eyebrow: "IA / TRAZABILIDAD", title: "Historial IA", description: "Consulta las propuestas y decisiones registradas por el usuario." },
   configuration: { eyebrow: "SISTEMA / CONFIGURACIÓN", title: "Configuración", description: "Estado de almacenamiento, modo IA y decisiones técnicas de esta entrega." },
@@ -474,6 +477,85 @@ export default function CanvasModelApp() {
     notify("Corte de seguimiento actualizado y guardado.");
   }
 
+  function handleSeedAnalyticsDemo() {
+    if (!activeOrganization) {
+      notify("Primero crea o selecciona una organización.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const missing = DEMO_KPI_DEFINITIONS.filter((demo) => !state.kpiDefinitions.some((definition) => definition.organizationId === activeOrganization.id && definition.name.toLocaleLowerCase() === demo.name.toLocaleLowerCase())).map((demo) => ({ ...demo, id: makeId("kpi"), organizationId: activeOrganization.id, createdAt: now, updatedAt: now }));
+    if (!missing.length) {
+      notify("El catálogo KPI ya está completo para esta organización.");
+      return;
+    }
+    commitState((current) => ({ ...current, kpiDefinitions: [...missing, ...current.kpiDefinitions] }));
+    notify(`${missing.length} KPI demo agregados. Revisa sus metas antes de usarlos.`);
+  }
+
+  function handleCreateKpi(draft: KpiDraft) {
+    if (!activeOrganization || !draft.name || !draft.unit || !draft.formula || !draft.source || !draft.responsible || !Number.isFinite(draft.baseline) || !Number.isFinite(draft.target) || !Number.isFinite(draft.tolerance) || draft.tolerance < 0) {
+      notify("Completa los campos del KPI y revisa sus valores numéricos.");
+      return;
+    }
+    if (state.kpiDefinitions.some((definition) => definition.organizationId === activeOrganization.id && definition.name.toLocaleLowerCase() === draft.name.toLocaleLowerCase())) {
+      notify("Ya existe un KPI con ese nombre en la organización.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const definition: KpiDefinition = { id: makeId("kpi"), organizationId: activeOrganization.id, ...draft, createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, kpiDefinitions: [definition, ...current.kpiDefinitions] }));
+    notify("KPI creado y guardado.");
+  }
+
+  function handleUpdateKpi(kpiId: string, draft: KpiDraft) {
+    const existing = state.kpiDefinitions.find((definition) => definition.id === kpiId && definition.organizationId === activeOrganization?.id);
+    if (!existing || !draft.name || !draft.unit || !draft.formula || !draft.source || !draft.responsible || !Number.isFinite(draft.baseline) || !Number.isFinite(draft.target) || !Number.isFinite(draft.tolerance) || draft.tolerance < 0) {
+      notify("Completa los campos del KPI y revisa sus valores numéricos.");
+      return;
+    }
+    if (state.kpiDefinitions.some((definition) => definition.id !== kpiId && definition.organizationId === existing.organizationId && definition.name.toLocaleLowerCase() === draft.name.toLocaleLowerCase())) {
+      notify("Ya existe otro KPI con ese nombre en la organización.");
+      return;
+    }
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, kpiDefinitions: current.kpiDefinitions.map((definition) => definition.id === kpiId ? { ...definition, ...draft, updatedAt: now } : definition), forecasts: current.forecasts.filter((forecast) => forecast.kpiDefinitionId !== kpiId) }));
+    notify("KPI actualizado; sus pronósticos anteriores requieren recalcularse.");
+  }
+
+  function handleGenerateForecast(kpiDefinitionId: string) {
+    const definition = state.kpiDefinitions.find((item) => item.id === kpiDefinitionId && item.organizationId === activeOrganization?.id);
+    if (!definition || !activePeriod) {
+      notify("Selecciona un KPI y un periodo activo antes de pronosticar.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const forecast = buildForecast(definition, state.observations.filter((item) => item.organizationId === definition.organizationId), activePeriod, makeId("forecast"), now);
+    commitState((current) => ({ ...current, forecasts: [forecast, ...current.forecasts.filter((item) => !(item.kpiDefinitionId === kpiDefinitionId && item.periodId === activePeriod.id))] }));
+    notify(forecast.quality === "SUFICIENTE" ? `Pronóstico actualizado con ${forecast.model}.` : "Pronóstico guardado como escenario estimado por historial insuficiente.");
+  }
+
+  function handleGenerateAllForecasts() {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización y un periodo antes de pronosticar.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const forecasts = state.kpiDefinitions.filter((definition) => definition.organizationId === activeOrganization.id).map((definition) => buildForecast(definition, state.observations.filter((item) => item.organizationId === activeOrganization.id), activePeriod, makeId("forecast"), now));
+    commitState((current) => ({ ...current, forecasts: [...forecasts, ...current.forecasts.filter((item) => !forecasts.some((forecast) => forecast.kpiDefinitionId === item.kpiDefinitionId && forecast.periodId === item.periodId))] }));
+    notify(`${forecasts.length} pronóstico(s) actualizados.`);
+  }
+
+  function handleCreateSimulation(draft: SimulationDraft) {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización y periodo antes de guardar un escenario.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const simulation: SimulationScenario = { id: makeId("simulation"), organizationId: activeOrganization.id, periodId: activePeriod.id, ...draft, createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, simulations: [simulation, ...current.simulations] }));
+    notify("Escenario de simulación guardado.");
+  }
+
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -609,6 +691,11 @@ export default function CanvasModelApp() {
   }
 
   const activeProjects = useMemo(() => state.projects.filter((project) => project.organizationId === activeOrganization?.id && project.periodId === activePeriod?.id), [activeOrganization?.id, activePeriod?.id, state.projects]);
+  const activeKpiDefinitions = useMemo(() => state.kpiDefinitions.filter((definition) => definition.organizationId === activeOrganization?.id), [activeOrganization?.id, state.kpiDefinitions]);
+  const activeForecasts = useMemo(() => state.forecasts.filter((forecast) => forecast.organizationId === activeOrganization?.id && forecast.periodId === activePeriod?.id), [activeOrganization?.id, activePeriod?.id, state.forecasts]);
+  const activeSimulations = useMemo(() => state.simulations.filter((simulation) => simulation.organizationId === activeOrganization?.id && simulation.periodId === activePeriod?.id), [activeOrganization?.id, activePeriod?.id, state.simulations]);
+  const activeCanvasAsIs = useMemo(() => state.canvasVersions.filter((version) => version.organizationId === activeOrganization?.id && version.periodId === activePeriod?.id && version.kind === "AS_IS").toSorted((a, b) => b.version - a.version)[0], [activeOrganization?.id, activePeriod?.id, state.canvasVersions]);
+  const activeCanvasToBe = useMemo(() => state.canvasVersions.filter((version) => version.organizationId === activeOrganization?.id && version.periodId === activePeriod?.id && version.kind === "TO_BE").toSorted((a, b) => b.version - a.version)[0], [activeOrganization?.id, activePeriod?.id, state.canvasVersions]);
   const meta = viewMeta[view];
   return (
     <main className="canvas-shell">
@@ -642,7 +729,7 @@ export default function CanvasModelApp() {
         </header>
 
         <div className="app-content">
-          {view === "dashboard" && <DashboardView state={state} organization={activeOrganization} period={activePeriod} observations={activeObservations} latestImport={latestImport} navigate={navigate} onMockAi={runMockAssistant} aiLoading={aiLoading} lastAiResponse={lastAiResponse} />}
+          {view === "dashboard" && <><DashboardView state={state} organization={activeOrganization} period={activePeriod} observations={activeObservations} latestImport={latestImport} navigate={navigate} onMockAi={runMockAssistant} aiLoading={aiLoading} lastAiResponse={lastAiResponse} /><DashboardAnalyticsView organization={activeOrganization} period={activePeriod} definitions={activeKpiDefinitions} observations={activeObservations} forecasts={activeForecasts} projects={activeProjects} tasks={state.projectTasks} tracking={state.projectTracking} /></>}
           {view === "organization" && <OrganizationView state={state} organization={activeOrganization} periods={organizationPeriods} onOpenOrganization={() => setModal("organization")} onOpenPeriod={() => setModal("period")} onEditOrganization={(id) => { setEditingOrganizationId(id); setModal("edit-organization"); }} onEditPeriod={(id) => { setEditingPeriodId(id); setModal("edit-period"); }} onSelectOrganization={chooseOrganization} />}
           {view === "data" && <DataView observations={activeObservations} period={activePeriod} periods={organizationPeriods} onObservation={handleObservation} onEditObservation={(id) => { setEditingObservationId(id); setModal("edit-observation"); }} onImportFile={handleImportFile} onConfirmImport={confirmImport} importPreview={importPreview} importing={importing} onExport={exportObservations} />}
           {(view === "canvas-as-is" || view === "canvas-to-be") && <CanvasEditorView state={state} organization={activeOrganization} period={activePeriod} kind={view === "canvas-as-is" ? "AS_IS" : "TO_BE"} onCreateVersion={handleCreateCanvasVersion} onCloneVersion={handleCloneCanvasVersion} onSaveElement={handleSaveCanvasElement} onDeleteElement={handleDeleteCanvasElement} onTransitionStatus={handleCanvasStatus} onCreateScenario={handleCreateScenario} />}
@@ -651,9 +738,13 @@ export default function CanvasModelApp() {
           {view === "projects" && <ProjectsView organization={activeOrganization} period={activePeriod} projects={activeProjects} canvasVersions={state.canvasVersions} tasks={state.projectTasks} milestones={state.projectMilestones} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onApproveProject={handleApproveProject} onNavigate={navigate} />}
           {view === "gantt" && <GanttView organization={activeOrganization} projects={activeProjects} tasks={state.projectTasks} milestones={state.projectMilestones} onCreateTask={handleCreateTask} onUpdateTask={handleUpdateTask} onCreateMilestone={handleCreateMilestone} onUpdateMilestone={handleUpdateMilestone} />}
           {view === "tracking" && <TrackingView organization={activeOrganization} projects={activeProjects} tracking={state.projectTracking} onCreateTracking={handleCreateTracking} onUpdateTracking={handleUpdateTracking} />}
+          {view === "kpi" && <KpiView organization={activeOrganization} definitions={activeKpiDefinitions} observations={state.observations.filter((item) => item.organizationId === activeOrganization?.id)} forecasts={activeForecasts} onCreate={handleCreateKpi} onUpdate={handleUpdateKpi} onSeedDemo={handleSeedAnalyticsDemo} />}
+          {view === "prediction" && <PredictionView organization={activeOrganization} period={activePeriod} definitions={activeKpiDefinitions} observations={state.observations.filter((item) => item.organizationId === activeOrganization?.id)} forecasts={activeForecasts} onGenerate={handleGenerateForecast} onGenerateAll={handleGenerateAllForecasts} onSeedDemo={handleSeedAnalyticsDemo} />}
+          {view === "simulation" && <SimulationView organization={activeOrganization} period={activePeriod} definitions={activeKpiDefinitions} observations={state.observations.filter((item) => item.organizationId === activeOrganization?.id)} forecasts={activeForecasts} scenarios={activeSimulations} onCreate={handleCreateSimulation} onSeedDemo={handleSeedAnalyticsDemo} />}
+          {view === "reports" && <ReportsView state={state} organization={activeOrganization} period={activePeriod} definitions={activeKpiDefinitions} forecasts={activeForecasts} canvasAsIs={activeCanvasAsIs} canvasToBe={activeCanvasToBe} />}
           {view === "ai-history" && <AiHistoryViewV3 entries={state.aiHistory} organization={activeOrganization} />}
           {view === "configuration" && <ConfigurationView storageAvailable={storageAvailable} persisted={storageAvailable && hydrated} onMockAi={runMockAssistant} aiLoading={aiLoading} />}
-          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-analysis", "projects", "gantt", "tracking", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
+          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-analysis", "projects", "gantt", "tracking", "kpi", "prediction", "simulation", "reports", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
         </div>
       </section>
 

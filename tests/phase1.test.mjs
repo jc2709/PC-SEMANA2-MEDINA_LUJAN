@@ -20,8 +20,9 @@ test("el demo de Fase 2 contiene nueve bloques, AS IS, TO BE y escenarios aislad
   const state = createDemoState();
   const asIs = state.canvasVersions.find((item) => item.kind === "AS_IS");
   const toBe = state.canvasVersions.find((item) => item.kind === "TO_BE");
-  assert.equal(state.schemaVersion, 3);
+  assert.equal(state.schemaVersion, 4);
   assert.equal(state.scenarios.length, 2);
+  assert.equal(state.kpiDefinitions.length, 4);
   assert.ok(asIs && toBe);
   assert.equal(new Set(asIs.elements.map((item) => item.block)).size, 9);
   assert.equal(toBe.sourceVersionId, asIs.id);
@@ -42,9 +43,12 @@ test("la migración conserva datos y agrega estructuras Canvas y ejecución vac�
   delete legacy.projectTasks;
   delete legacy.projectMilestones;
   delete legacy.projectTracking;
+  delete legacy.kpiDefinitions;
+  delete legacy.forecasts;
+  delete legacy.simulations;
   records.set(STORAGE_KEY, JSON.stringify(legacy));
   const migrated = loadState(createDemoState());
-  assert.equal(migrated.state.schemaVersion, 3);
+  assert.equal(migrated.state.schemaVersion, 4);
   assert.equal(migrated.state.organizations[0].name, "Comercial Andina S.A.C.");
   assert.deepEqual(migrated.state.scenarios, []);
   assert.deepEqual(migrated.state.canvasVersions, []);
@@ -52,7 +56,30 @@ test("la migración conserva datos y agrega estructuras Canvas y ejecución vac�
   assert.deepEqual(migrated.state.projectTasks, []);
   assert.deepEqual(migrated.state.projectMilestones, []);
   assert.deepEqual(migrated.state.projectTracking, []);
+  assert.deepEqual(migrated.state.kpiDefinitions, []);
+  assert.deepEqual(migrated.state.forecasts, []);
+  assert.deepEqual(migrated.state.simulations, []);
   delete globalThis.window;
+});
+
+test("Fase 5 calcula pronósticos reproducibles y marca historial insuficiente", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const { buildForecast, buildSimulationResults } = await import(new URL("../src/services/analytics/analyticsService.ts", import.meta.url).href);
+  const state = createDemoState();
+  const sales = state.kpiDefinitions.find((item) => item.name === "Ventas");
+  assert.ok(sales);
+  const forecast = buildForecast(sales, state.observations, state.periods[1], "forecast-test", "2026-11-01T00:00:00.000Z");
+  assert.equal(forecast.quality, "SUFICIENTE");
+  assert.ok(forecast.prediction > 0);
+  assert.ok(forecast.lowerBound <= forecast.prediction && forecast.prediction <= forecast.upperBound);
+  assert.ok(["NAIVE", "MEDIA_MOVIL", "TENDENCIA_LINEAL", "SUAVIZACION_EXPONENCIAL"].includes(forecast.model));
+  const shortHistory = state.observations.filter((item) => item.kpi === "Ventas").slice(-2);
+  const insufficient = buildForecast(sales, shortHistory, state.periods[1], "forecast-short", "2026-11-01T00:00:00.000Z");
+  assert.equal(insufficient.quality, "INSUFICIENTE");
+  assert.match(insufficient.explanation, /HISTORIAL INSUFICIENTE/);
+  const results = buildSimulationResults([sales], state.observations, [forecast], { marketing: 10, conversion: 8, price: 2, costs: 4, projectDelay: 0, capacity: 5 });
+  assert.equal(results.length, 1);
+  assert.notEqual(results[0].scenarioValue, results[0].baseValue);
 });
 
 test("la persistencia guarda respaldo y recupera si el snapshot principal se corrompe", async () => {

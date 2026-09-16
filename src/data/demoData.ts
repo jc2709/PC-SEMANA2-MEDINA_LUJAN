@@ -1,4 +1,4 @@
-import type { AppState, CanvasBlockKey, CanvasElement, CanvasScenario, CanvasVersion, HistoricalObservation, Organization, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry } from "../types/domain";
+import type { AppState, CanvasBlockKey, CanvasElement, CanvasScenario, CanvasVersion, HistoricalObservation, KpiDefinition, Organization, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry } from "../types/domain";
 
 export const DEMO_ORGANIZATION: Organization = {
   id: "org-comercial-andina",
@@ -50,6 +50,13 @@ export const DEMO_OBSERVATIONS: HistoricalObservation[] = [
   observation("obs-oct-costs", "period-2026-10", "Costos operativos", 42200, "PEN", "2026-10-31"),
   observation("obs-oct-customers", "period-2026-10", "Clientes activos", 451, "clientes", "2026-10-31"),
   observation("obs-oct-conversion", "period-2026-10", "Conversión", 4.3, "%", "2026-10-31"),
+];
+
+export const DEMO_KPI_DEFINITIONS: KpiDefinition[] = [
+  { id: "kpi-sales", organizationId: DEMO_ORGANIZATION.id, name: "Ventas", description: "Ingresos comerciales del periodo.", formula: "SUM(ventas)", unit: "PEN", periodicity: "MENSUAL", baseline: 68200, target: 76000, tolerance: 5, responsible: "Equipo comercial", source: "ERP comercial", direction: "MAYOR_MEJOR", createdAt: "2026-08-01T09:00:00-05:00", updatedAt: "2026-08-01T09:00:00-05:00" },
+  { id: "kpi-costs", organizationId: DEMO_ORGANIZATION.id, name: "Costos operativos", description: "Costos operativos acumulados del periodo.", formula: "SUM(costos)", unit: "PEN", periodicity: "MENSUAL", baseline: 40100, target: 39000, tolerance: 5, responsible: "Operaciones", source: "ERP financiero", direction: "MENOR_MEJOR", createdAt: "2026-08-01T09:00:00-05:00", updatedAt: "2026-08-01T09:00:00-05:00" },
+  { id: "kpi-customers", organizationId: DEMO_ORGANIZATION.id, name: "Clientes activos", description: "Clientes con actividad comercial en el periodo.", formula: "COUNT_DISTINCT(clientes)", unit: "clientes", periodicity: "MENSUAL", baseline: 418, target: 480, tolerance: 5, responsible: "Equipo comercial", source: "CRM", direction: "MAYOR_MEJOR", createdAt: "2026-08-01T09:00:00-05:00", updatedAt: "2026-08-01T09:00:00-05:00" },
+  { id: "kpi-conversion", organizationId: DEMO_ORGANIZATION.id, name: "Conversión", description: "Porcentaje de oportunidades que se convierten en pedidos.", formula: "pedidos / oportunidades * 100", unit: "%", periodicity: "MENSUAL", baseline: 3.8, target: 5, tolerance: 5, responsible: "María Medina", source: "CRM comercial", direction: "MAYOR_MEJOR", createdAt: "2026-08-01T09:00:00-05:00", updatedAt: "2026-08-01T09:00:00-05:00" },
 ];
 
 const demoElement = (id: string, block: CanvasBlockKey, title: string, description: string, extra: Partial<CanvasElement> = {}): CanvasElement => ({
@@ -178,7 +185,7 @@ export const DEMO_PROJECT_TRACKING: ProjectTrackingEntry[] = [
 
 export function createDemoState(): AppState {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     organizations: [DEMO_ORGANIZATION],
     periods: DEMO_PERIODS,
     observations: DEMO_OBSERVATIONS,
@@ -190,6 +197,9 @@ export function createDemoState(): AppState {
     projectTasks: DEMO_PROJECT_TASKS,
     projectMilestones: DEMO_PROJECT_MILESTONES,
     projectTracking: DEMO_PROJECT_TRACKING,
+    kpiDefinitions: DEMO_KPI_DEFINITIONS,
+    forecasts: [],
+    simulations: [],
     activeOrganizationId: DEMO_ORGANIZATION.id,
     activePeriodId: "period-2026-09",
   };

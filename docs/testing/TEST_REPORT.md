@@ -58,3 +58,16 @@ Evidencia de cierre de Fase 2: `npm run build` PASS, `npm run lint` PASS, `npm t
 | F4-DEMO-01 | Formularios | Cargar caso demo | El formulario se completa sin guardar hasta confirmar | Cubierto por componente reutilizable y manual |
 
 Evidencia técnica de Fase 4: `npm run build` PASS, `npm run lint` PASS y 13/13 pruebas automáticas PASS. La validación manual, incluida la carga rápida de casos demo, queda descrita en `docs/manual/FASE_4_MANUAL.md` para la revisión del usuario.
+
+## Fases 5 y 6
+
+| ID | Módulo | Escenario | Resultado esperado | Resultado |
+| --- | --- | --- | --- | --- |
+| F5-KPI-01 | KPI | Crear, editar y cargar demo | Se guarda un catálogo con fórmula, meta, baseline y tolerancia | Cubierto por UI y prueba visual |
+| F5-PRED-01 | Predicción | Generar mes +1 | Se registra modelo, MAE, corte, rango y tendencia | Cubierto por servicio y prueba automática |
+| F5-PRED-02 | Pocos datos | Pronosticar con menos de tres observaciones | Se muestra HISTORIAL INSUFICIENTE y escenario estimado | Cubierto por prueba automática y UI |
+| F5-SIM-01 | Simulación | Cambiar variables BASE vs ESCENARIO | Se calculan impacto absoluto y porcentual con reglas transparentes | Cubierto por servicio y prueba visual |
+| F6-DASH-01 | Dashboard | Revisar real, meta, proyectado y presupuesto | Las cifras proceden del estado persistido | Cubierto por UI y prueba visual |
+| F6-EXP-01 | Reportes | Exportar CSV, Excel y PPTX | Se descarga un paquete con datos del contexto activo | Cubierto por UI y manual |
+
+Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 14/14 pruebas automáticas PASS. La validación visual local confirmó los módulos KPI, Predicción, Simulación y Reportes sin errores de consola.

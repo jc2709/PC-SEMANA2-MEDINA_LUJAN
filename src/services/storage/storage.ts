@@ -13,18 +13,21 @@ function hasStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-type PersistedState = Omit<AppState, "schemaVersion" | "projects" | "projectTasks" | "projectMilestones" | "projectTracking"> & {
-  schemaVersion: 1 | 2 | 3;
+type PersistedState = Omit<AppState, "schemaVersion" | "projects" | "projectTasks" | "projectMilestones" | "projectTracking" | "kpiDefinitions" | "forecasts" | "simulations"> & {
+  schemaVersion: 1 | 2 | 3 | 4;
   projects?: AppState["projects"];
   projectTasks?: AppState["projectTasks"];
   projectMilestones?: AppState["projectMilestones"];
   projectTracking?: AppState["projectTracking"];
+  kpiDefinitions?: AppState["kpiDefinitions"];
+  forecasts?: AppState["forecasts"];
+  simulations?: AppState["simulations"];
 };
 
 function isAppState(value: unknown): value is PersistedState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as { schemaVersion?: number; organizations?: unknown; periods?: unknown; observations?: unknown; imports?: unknown; aiHistory?: unknown; activeOrganizationId?: unknown; activePeriodId?: unknown };
-  return (candidate.schemaVersion === 1 || candidate.schemaVersion === 2 || candidate.schemaVersion === 3)
+  return (candidate.schemaVersion === 1 || candidate.schemaVersion === 2 || candidate.schemaVersion === 3 || candidate.schemaVersion === 4)
     && Array.isArray(candidate.organizations)
     && Array.isArray(candidate.periods)
     && Array.isArray(candidate.observations)
@@ -37,13 +40,16 @@ function isAppState(value: unknown): value is PersistedState {
 function migrateState(state: PersistedState): AppState {
   return {
     ...state,
-    schemaVersion: 3,
+    schemaVersion: 4,
     scenarios: state.scenarios ?? [],
     canvasVersions: state.canvasVersions ?? [],
     projects: state.projects ?? [],
     projectTasks: state.projectTasks ?? [],
     projectMilestones: state.projectMilestones ?? [],
     projectTracking: state.projectTracking ?? [],
+    kpiDefinitions: state.kpiDefinitions ?? [],
+    forecasts: state.forecasts ?? [],
+    simulations: state.simulations ?? [],
   };
 }
 
