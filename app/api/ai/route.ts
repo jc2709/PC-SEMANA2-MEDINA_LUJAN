@@ -14,17 +14,23 @@ const ALLOWED_OPERATIONS = new Set<AiOperation>([
 ]);
 
 function parseJsonText(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    const fence = String.fromCharCode(96);
-    const cleaned = value.replace(new RegExp("^" + fence + "{3}(?:json)?\\s*", "i"), "").replace(new RegExp("\\s*" + fence + "{3}$", "i"), "").trim();
+  const candidates = [value.trim()];
+  const fence = String.fromCharCode(96);
+  const cleaned = value.replace(new RegExp("^" + fence + "{3}(?:json)?\\s*", "i"), "").replace(new RegExp("\\s*" + fence + "{3}$", "i"), "").trim();
+  if (cleaned && cleaned !== candidates[0]) candidates.push(cleaned);
+
+  const firstObject = value.indexOf("{");
+  const lastObject = value.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) candidates.push(value.slice(firstObject, lastObject + 1));
+
+  for (const candidate of candidates) {
     try {
-      return JSON.parse(cleaned);
+      return JSON.parse(candidate);
     } catch {
-      return null;
+      // Try the next common model-output wrapper.
     }
   }
+  return null;
 }
 
 function logicalPrompt(operation: AiOperation, context: Record<string, unknown>) {
