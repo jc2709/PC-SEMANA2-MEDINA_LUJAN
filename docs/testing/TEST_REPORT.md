@@ -85,4 +85,4 @@ Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 1
 | F7-SEC-01 | Seguridad | Inspeccionar cliente y preload | No existe `GEMINI_API_KEY` ni credencial | PASS — prueba de contrato |
 | F7-FALLBACK-01 | Resiliencia | Desconectar Vercel/Gemini | Aparece MOCK y continúan las funciones locales | Cubierto por contrato existente |
 
-Evidencia técnica de Fase 7: `npm run build:html` PASS y pruebas de contrato actualizadas. El empaquetado Windows requiere ejecutar `npm run package:win` en un equipo con el runtime de Electron disponible.
+Evidencia técnica de Fase 7: `npm run build:html` PASS, `npm run package:win:dir` PASS (generó `release/win-unpacked/Canvas Model IA.exe`), 16/16 pruebas automáticas PASS y lint PASS. La prueba remota confirmó preflight `Origin: null` HTTP 204 y POST IA HTTP 200 en modo REAL.
