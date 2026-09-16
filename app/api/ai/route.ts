@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createMockResponse, normalizeAiResponse, type AiOperation } from "../../../src/services/ai/aiModel";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
 
 const ALLOWED_OPERATIONS = new Set<AiOperation>([
   "analizarCanvas",
