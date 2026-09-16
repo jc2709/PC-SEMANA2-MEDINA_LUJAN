@@ -56,6 +56,7 @@ Evidencia de cierre de Fase 2: `npm run build` PASS, `npm run lint` PASS, `npm t
 | F4-PER-01 | Persistencia | Recargar ejecución | Proyectos, tareas, hitos y seguimiento permanecen | Cubierto por migración y manual |
 | F4-VAL-01 | Validaciones | Fechas y campos obligatorios | No se crean registros inválidos | Cubierto por handlers |
 | F4-DEMO-01 | Formularios | Cargar caso demo | El formulario se completa sin guardar hasta confirmar | Cubierto por componente reutilizable y manual |
+| F4-PROJ-02A | Proyectos | Abrir Nuevo proyecto | El formulario se renderiza completo sin pantalla negra ni error de consola | Verificado en navegador local |
 
 Evidencia técnica de Fase 4: `npm run build` PASS, `npm run lint` PASS y 13/13 pruebas automáticas PASS. La validación manual, incluida la carga rápida de casos demo, queda descrita en `docs/manual/FASE_4_MANUAL.md` para la revisión del usuario.
 
