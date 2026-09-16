@@ -41,6 +41,27 @@ function logicalPrompt(operation: AiOperation, context: Record<string, unknown>)
   ].join("\\n");
 }
 
+async function requestGemini(apiKey: string, prompt: string) {
+  const requestBody = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 1800 },
+  });
+  let response: Response | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(GEMINI_MODEL) + ":generateContent", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: requestBody,
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+    });
+    if (![429, 500, 503].includes(response.status) || attempt === 1) break;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+
+  return response;
+}
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -64,15 +85,8 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json(createMockResponse(operation, context), { headers: { "x-ai-mode": "mock" } });
 
   try {
-    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(GEMINI_MODEL) + ":generateContent", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: logicalPrompt(operation, context) }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 1800 },
-      }),
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-    });
+    const geminiResponse = await requestGemini(apiKey, logicalPrompt(operation, context));
+    if (!geminiResponse) return NextResponse.json(createMockResponse(operation, context, "Gemini no devolvió respuesta"), { headers: { "x-ai-mode": "mock" } });
     if (!geminiResponse.ok) return NextResponse.json(createMockResponse(operation, context, "Gemini respondió HTTP " + geminiResponse.status), { headers: { "x-ai-mode": "mock" } });
     const result: unknown = await geminiResponse.json();
     const candidateText = (((result as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts ?? []).map((part) => part.text ?? "").join("\\n")).trim();
