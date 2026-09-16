@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createMockResponse, normalizeAiResponse, type AiOperation } from "../../../src/services/ai/aiModel";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
+const GEMINI_TIMEOUT_MS = 60000;
 
 const ALLOWED_OPERATIONS = new Set<AiOperation>([
   "analizarCanvas",
@@ -68,9 +69,9 @@ export async function POST(request: Request) {
       headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: logicalPrompt(operation, context) }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+        generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 1800 },
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     });
     if (!geminiResponse.ok) return NextResponse.json(createMockResponse(operation, context, "Gemini respondió HTTP " + geminiResponse.status), { headers: { "x-ai-mode": "mock" } });
     const result: unknown = await geminiResponse.json();
