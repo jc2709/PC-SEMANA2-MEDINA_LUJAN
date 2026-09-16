@@ -15,3 +15,18 @@
 | F1-SEC-01 | Seguridad | Buscar clave en frontend versionado | No existe clave real ni secreto en `.env.example` | PASS — test automático |
 
 Evidencia de cierre: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (6/6 pruebas). La prueba visual local confirmó edición y persistencia de una organización, un periodo y una observación después de recargar; no se reportaron errores ni advertencias de consola.
+
+## Fase 2
+
+| ID | Módulo | Escenario | Resultado esperado | Resultado |
+| --- | --- | --- | --- | --- |
+| F2-CANVAS-01 | Canvas | Abrir AS IS | Se muestran los nueve bloques | PASS — test automático y navegador local |
+| F2-CANVAS-02 | Elementos | Agregar y editar elemento | Se guardan descripción, hipótesis y metadatos | PASS — navegador local |
+| F2-VERSION-01 | Versionado | Enviar a revisión y aprobar | La versión aprobada queda congelada | PASS — navegador local |
+| F2-VERSION-02 | Versionado | Clonar versión aprobada | Se crea una nueva versión editable sin alterar la aprobada | PASS — navegador local |
+| F2-TOBE-01 | TO BE | Derivar TO BE desde AS IS | TO BE tiene elementos propios y AS IS permanece intacto | PASS — test automático y navegador local |
+| F2-SCENARIO-01 | Escenarios | Mantener escenarios independientes | Un escenario no comparte elementos editables con otro | PASS — modelo de dominio y UI |
+| F2-COMP-01 | Comparación | Comparar AS IS vs TO BE | Clasifica CREAR, MODIFICAR, ELIMINAR y MANTENER | PASS — navegador local |
+| F2-PER-01 | Persistencia | Recargar Canvas | Versiones, elementos y estados permanecen | PASS — persistencia versionada |
+
+Evidencia de cierre de Fase 2: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (8/8 pruebas). La prueba visual confirmó creación, edición, clonación, comparación y aprobación sin errores de consola.

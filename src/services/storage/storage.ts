@@ -13,10 +13,12 @@ function hasStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function isAppState(value: unknown): value is AppState {
+type PersistedState = Omit<AppState, "schemaVersion"> & { schemaVersion: 1 | 2 };
+
+function isAppState(value: unknown): value is PersistedState {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<AppState>;
-  return candidate.schemaVersion === 1
+  const candidate = value as { schemaVersion?: number; organizations?: unknown; periods?: unknown; observations?: unknown; imports?: unknown; aiHistory?: unknown; activeOrganizationId?: unknown; activePeriodId?: unknown };
+  return (candidate.schemaVersion === 1 || candidate.schemaVersion === 2)
     && Array.isArray(candidate.organizations)
     && Array.isArray(candidate.periods)
     && Array.isArray(candidate.observations)
@@ -26,17 +28,27 @@ function isAppState(value: unknown): value is AppState {
     && typeof candidate.activePeriodId === "string";
 }
 
+function migrateState(state: AppState): AppState {
+  if (state.schemaVersion === 2) return state;
+  return {
+    ...state,
+    schemaVersion: 2,
+    scenarios: [],
+    canvasVersions: [],
+  };
+}
+
 type StoredSnapshot = { state: AppState; savedAt: string };
 
 function parseSnapshot(raw: string | null): StoredSnapshot | null {
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (isAppState(parsed)) return { state: parsed, savedAt: "1970-01-01T00:00:00.000Z" };
+    if (isAppState(parsed)) return { state: migrateState(parsed), savedAt: "1970-01-01T00:00:00.000Z" };
     if (!parsed || typeof parsed !== "object" || !("state" in parsed)) return null;
     const envelope = parsed as { state?: unknown; savedAt?: unknown };
     return isAppState(envelope.state)
-      ? { state: envelope.state, savedAt: typeof envelope.savedAt === "string" ? envelope.savedAt : "1970-01-01T00:00:00.000Z" }
+      ? { state: migrateState(envelope.state), savedAt: typeof envelope.savedAt === "string" ? envelope.savedAt : "1970-01-01T00:00:00.000Z" }
       : null;
   } catch {
     return null;

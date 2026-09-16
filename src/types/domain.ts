@@ -2,6 +2,19 @@ export type Sector = "industrial" | "comercial" | "servicios";
 export type OrganizationSize = "micro" | "pequena" | "mediana" | "grande";
 export type OrganizationStatus = "ACTIVA" | "INACTIVA";
 export type DataQuality = "ALTA" | "MEDIA" | "BAJA";
+export type CanvasKind = "AS_IS" | "TO_BE";
+export type CanvasStatus = "BORRADOR" | "EN_REVISION" | "APROBADO" | "ARCHIVADO";
+export type ScenarioType = "BASE" | "CONSERVADOR" | "MODERADO" | "AGRESIVO" | "PERSONALIZADO";
+export type CanvasBlockKey =
+  | "customer-segments"
+  | "value-propositions"
+  | "channels"
+  | "customer-relationships"
+  | "revenue-streams"
+  | "key-resources"
+  | "key-activities"
+  | "key-partners"
+  | "cost-structure";
 
 export interface Organization {
   id: string;
@@ -68,13 +81,60 @@ export interface AiHistoryEntry {
   createdAt: string;
 }
 
+export interface CanvasScenario {
+  id: string;
+  organizationId: string;
+  periodId: string;
+  name: string;
+  type: ScenarioType;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CanvasElement {
+  id: string;
+  block: CanvasBlockKey;
+  title: string;
+  description: string;
+  hypothesis: string;
+  evidence: string;
+  responsible: string;
+  relatedKpi: string;
+  confidence: number;
+  tags: string[];
+  comments: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  sourceElementId?: string;
+}
+
+export interface CanvasVersion {
+  id: string;
+  organizationId: string;
+  periodId: string;
+  scenarioId: string | null;
+  kind: CanvasKind;
+  version: number;
+  name: string;
+  status: CanvasStatus;
+  sourceVersionId?: string;
+  elements: CanvasElement[];
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+}
+
 export interface AppState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   organizations: Organization[];
   periods: Period[];
   observations: HistoricalObservation[];
   imports: ImportLog[];
   aiHistory: AiHistoryEntry[];
+  scenarios: CanvasScenario[];
+  canvasVersions: CanvasVersion[];
   activeOrganizationId: string;
   activePeriodId: string;
 }

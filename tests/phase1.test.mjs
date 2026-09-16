@@ -15,6 +15,38 @@ test("el estado demo tiene organización, periodos y datos aislados", async () =
   assert.notDeepEqual(september.map((item) => item.id), october.map((item) => item.id));
 });
 
+test("el demo de Fase 2 contiene nueve bloques, AS IS, TO BE y escenarios aislados", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const state = createDemoState();
+  const asIs = state.canvasVersions.find((item) => item.kind === "AS_IS");
+  const toBe = state.canvasVersions.find((item) => item.kind === "TO_BE");
+  assert.equal(state.schemaVersion, 2);
+  assert.equal(state.scenarios.length, 2);
+  assert.ok(asIs && toBe);
+  assert.equal(new Set(asIs.elements.map((item) => item.block)).size, 9);
+  assert.equal(toBe.sourceVersionId, asIs.id);
+  assert.ok(toBe.elements.filter((item) => item.title !== "WhatsApp Business").every((item) => item.sourceElementId));
+  assert.ok(toBe.elements.some((item) => item.title === "WhatsApp Business"));
+});
+
+test("la migración de Fase 1 conserva datos y agrega estructuras Canvas vacías", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const { loadState, STORAGE_KEY } = await import(new URL("../src/services/storage/storage.ts", import.meta.url).href);
+  const records = new Map();
+  globalThis.window = { localStorage: { getItem: (key) => records.get(key) ?? null, setItem: (key, value) => records.set(key, value), removeItem: (key) => records.delete(key) } };
+  const legacy = createDemoState();
+  legacy.schemaVersion = 1;
+  delete legacy.scenarios;
+  delete legacy.canvasVersions;
+  records.set(STORAGE_KEY, JSON.stringify(legacy));
+  const migrated = loadState(createDemoState());
+  assert.equal(migrated.state.schemaVersion, 2);
+  assert.equal(migrated.state.organizations[0].name, "Comercial Andina S.A.C.");
+  assert.deepEqual(migrated.state.scenarios, []);
+  assert.deepEqual(migrated.state.canvasVersions, []);
+  delete globalThis.window;
+});
+
 test("la persistencia guarda respaldo y recupera si el snapshot principal se corrompe", async () => {
   const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
   const { loadState, saveState, STORAGE_KEY, STORAGE_BACKUP_KEY } = await import(new URL("../src/services/storage/storage.ts", import.meta.url).href);

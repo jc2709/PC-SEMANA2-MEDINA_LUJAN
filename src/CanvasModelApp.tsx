@@ -6,7 +6,8 @@ import { createDemoState } from "./data/demoData";
 import { aiService, type AiResponse } from "./services/ai/aiService";
 import { parseDataFile, previewStats, type ImportPreview } from "./services/import/importService";
 import { loadState, saveState } from "./services/storage/storage";
-import type { AppState, AppView, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
+import { CanvasComparisonView, CanvasEditorView, type CanvasElementDraft, type CanvasScenarioDraft, type CanvasVersionDraft } from "./modules/canvas/CanvasModule";
+import type { AppState, AppView, CanvasKind, CanvasStatus, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
 import { formatCurrency, formatDate, formatNumber, makeId, todayInputValue } from "./utils/format";
 
 type Modal = "organization" | "edit-organization" | "period" | "edit-period" | "edit-observation" | null;
@@ -15,9 +16,9 @@ const navigation: Array<{ id: AppView; label: string; icon: string; phase?: stri
   { id: "dashboard", label: "Dashboard", icon: "⌂" },
   { id: "organization", label: "Organización", icon: "▣" },
   { id: "data", label: "Datos", icon: "▤" },
-  { id: "canvas-as-is", label: "Canvas AS IS", icon: "▦", phase: "F2" },
-  { id: "canvas-to-be", label: "Canvas TO BE", icon: "◇", phase: "F2" },
-  { id: "comparison", label: "Comparación", icon: "⇄", phase: "F2" },
+  { id: "canvas-as-is", label: "Canvas AS IS", icon: "▦" },
+  { id: "canvas-to-be", label: "Canvas TO BE", icon: "◇" },
+  { id: "comparison", label: "Comparación", icon: "⇄" },
   { id: "projects", label: "Proyectos", icon: "□", phase: "F4" },
   { id: "gantt", label: "Gantt", icon: "▥", phase: "F4" },
   { id: "tracking", label: "Seguimiento", icon: "◷", phase: "F4" },
@@ -33,9 +34,9 @@ const viewMeta: Record<AppView, { eyebrow: string; title: string; description: s
   dashboard: { eyebrow: "NÚCLEO / RESUMEN", title: "Canvas Model IA", description: "El punto de partida para conectar datos, decisiones y evolución del modelo de negocio." },
   organization: { eyebrow: "CONFIGURACIÓN / CONTEXTO", title: "Organizaciones y periodos", description: "Aísla el contexto de cada organización y evita mezclar información entre periodos." },
   data: { eyebrow: "DATOS / INGRESO", title: "Datos históricos", description: "Registra observaciones manualmente o importa archivos con validación fila por fila." },
-  "canvas-as-is": { eyebrow: "CANVAS / ACTUAL", title: "Canvas AS IS", description: "El modelo actual se habilitará en la Fase 2." },
-  "canvas-to-be": { eyebrow: "CANVAS / FUTURO", title: "Canvas TO BE", description: "Las alternativas futuras se habilitarán en la Fase 2." },
-  comparison: { eyebrow: "CANVAS / BRECHAS", title: "Comparación AS IS vs TO BE", description: "La clasificación de brechas se habilitará en la Fase 2." },
+  "canvas-as-is": { eyebrow: "CANVAS / ACTUAL", title: "Canvas AS IS", description: "Documenta el modelo de negocio actual con evidencia y responsables." },
+  "canvas-to-be": { eyebrow: "CANVAS / FUTURO", title: "Canvas TO BE", description: "Construye alternativas futuras revisables y versionadas." },
+  comparison: { eyebrow: "CANVAS / BRECHAS", title: "Comparación AS IS vs TO BE", description: "Identifica qué se crea, modifica, elimina o mantiene." },
   projects: { eyebrow: "EJECUCIÓN / CAMBIOS", title: "Proyectos", description: "La gestión de proyectos se habilitará en la Fase 4." },
   gantt: { eyebrow: "EJECUCIÓN / PLAN", title: "Gantt", description: "El plan de actividades se habilitará en la Fase 4." },
   tracking: { eyebrow: "EJECUCIÓN / CONTROL", title: "Seguimiento", description: "El seguimiento de ejecución se habilitará en la Fase 4." },
@@ -263,6 +264,75 @@ export default function CanvasModelApp() {
     notify("Observación actualizada y guardada.");
   }
 
+  function handleCreateCanvasVersion(draft: CanvasVersionDraft & { kind: CanvasKind }) {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización con un periodo activo antes de crear un Canvas.");
+      return;
+    }
+    const name = draft.name.trim();
+    if (!name) {
+      notify("Escribe un nombre para la versión del Canvas.");
+      return;
+    }
+    const scenarioId = draft.kind === "TO_BE" && state.scenarios.some((item) => item.id === draft.scenarioId && item.organizationId === activeOrganization.id && item.periodId === activePeriod.id) ? draft.scenarioId : null;
+    const version = Math.max(0, ...state.canvasVersions.filter((item) => item.organizationId === activeOrganization.id && item.periodId === activePeriod.id && item.kind === draft.kind).map((item) => item.version)) + 1;
+    const now = new Date().toISOString();
+    const canvasVersion = { id: makeId("canvas"), organizationId: activeOrganization.id, periodId: activePeriod.id, scenarioId, kind: draft.kind, version, name, status: "BORRADOR" as const, elements: [], createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, canvasVersions: [canvasVersion, ...current.canvasVersions] }));
+    notify(`${draft.kind === "AS_IS" ? "AS IS" : "TO BE"} v${version} creado como borrador.`);
+  }
+
+  function handleCloneCanvasVersion(sourceId: string, targetKind?: CanvasKind) {
+    const source = state.canvasVersions.find((item) => item.id === sourceId);
+    if (!source) return;
+    const kind = targetKind ?? source.kind;
+    const versions = state.canvasVersions.filter((item) => item.organizationId === source.organizationId && item.periodId === source.periodId && item.kind === kind);
+    const version = Math.max(0, ...versions.map((item) => item.version)) + 1;
+    const now = new Date().toISOString();
+    const cloned = { ...source, id: makeId("canvas"), kind, version, name: kind !== source.kind ? `TO BE de ${source.name}` : `${source.name} · copia editable`, scenarioId: kind === "TO_BE" ? source.scenarioId : null, sourceVersionId: source.id, status: "BORRADOR" as const, elements: source.elements.map((item) => ({ ...item, id: makeId("element"), sourceElementId: item.sourceElementId ?? item.id, createdAt: now, updatedAt: now })), createdAt: now, updatedAt: now, approvedAt: undefined };
+    commitState((current) => ({ ...current, canvasVersions: [cloned, ...current.canvasVersions] }));
+    notify(`${kind === "AS_IS" ? "AS IS" : "TO BE"} v${version} creado como copia editable.`);
+  }
+
+  function handleSaveCanvasElement(versionId: string, elementId: string | null, draft: CanvasElementDraft) {
+    const now = new Date().toISOString();
+    const newElement = elementId ? null : { ...draft, id: makeId("element"), createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, canvasVersions: current.canvasVersions.map((canvas) => canvas.id !== versionId || canvas.status !== "BORRADOR" ? canvas : { ...canvas, elements: elementId ? canvas.elements.map((item) => item.id === elementId ? { ...item, ...draft, updatedAt: now } : item) : [...canvas.elements, newElement!], updatedAt: now }) }));
+    notify(elementId ? "Elemento del Canvas actualizado y guardado." : "Elemento agregado y guardado.");
+  }
+
+  function handleDeleteCanvasElement(versionId: string, elementId: string) {
+    commitState((current) => ({ ...current, canvasVersions: current.canvasVersions.map((canvas) => canvas.id !== versionId || canvas.status !== "BORRADOR" ? canvas : { ...canvas, elements: canvas.elements.filter((item) => item.id !== elementId), updatedAt: new Date().toISOString() }) }));
+    notify("Elemento eliminado del borrador.");
+  }
+
+  function handleCanvasStatus(versionId: string, status: CanvasStatus) {
+    const now = new Date().toISOString();
+    commitState((current) => ({ ...current, canvasVersions: current.canvasVersions.map((canvas) => canvas.id === versionId ? { ...canvas, status, approvedAt: status === "APROBADO" ? now : canvas.approvedAt, updatedAt: now } : canvas) }));
+    notify(`Versión actualizada a ${status.toLowerCase().replace("_", " ")}.`);
+  }
+
+  function handleCreateScenario(draft: CanvasScenarioDraft) {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización con un periodo activo antes de crear un escenario.");
+      return;
+    }
+    const name = draft.name.trim();
+    const description = draft.description.trim();
+    if (!name || !description) {
+      notify("Completa el nombre y la descripción del escenario.");
+      return;
+    }
+    if (state.scenarios.some((item) => item.organizationId === activeOrganization.id && item.periodId === activePeriod.id && item.name.toLowerCase() === name.toLowerCase())) {
+      notify("Ese escenario ya existe en el periodo activo.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const scenario = { id: makeId("scenario"), organizationId: activeOrganization.id, periodId: activePeriod.id, name, type: draft.type, description, createdAt: now, updatedAt: now };
+    commitState((current) => ({ ...current, scenarios: [scenario, ...current.scenarios] }));
+    notify("Escenario creado y guardado.");
+  }
+
   async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -361,9 +431,11 @@ export default function CanvasModelApp() {
           {view === "dashboard" && <DashboardView state={state} organization={activeOrganization} period={activePeriod} observations={activeObservations} latestImport={latestImport} navigate={navigate} onMockAi={runMockAssistant} aiLoading={aiLoading} lastAiResponse={lastAiResponse} />}
           {view === "organization" && <OrganizationView state={state} organization={activeOrganization} periods={organizationPeriods} onOpenOrganization={() => setModal("organization")} onOpenPeriod={() => setModal("period")} onEditOrganization={(id) => { setEditingOrganizationId(id); setModal("edit-organization"); }} onEditPeriod={(id) => { setEditingPeriodId(id); setModal("edit-period"); }} onSelectOrganization={chooseOrganization} />}
           {view === "data" && <DataView observations={activeObservations} period={activePeriod} periods={organizationPeriods} onObservation={handleObservation} onEditObservation={(id) => { setEditingObservationId(id); setModal("edit-observation"); }} onImportFile={handleImportFile} onConfirmImport={confirmImport} importPreview={importPreview} importing={importing} onExport={exportObservations} />}
+          {(view === "canvas-as-is" || view === "canvas-to-be") && <CanvasEditorView state={state} organization={activeOrganization} period={activePeriod} kind={view === "canvas-as-is" ? "AS_IS" : "TO_BE"} onCreateVersion={handleCreateCanvasVersion} onCloneVersion={handleCloneCanvasVersion} onSaveElement={handleSaveCanvasElement} onDeleteElement={handleDeleteCanvasElement} onTransitionStatus={handleCanvasStatus} onCreateScenario={handleCreateScenario} />}
+          {view === "comparison" && <CanvasComparisonView state={state} organization={activeOrganization} period={activePeriod} />}
           {view === "ai-history" && <AiHistoryView entries={state.aiHistory} organization={activeOrganization} />}
           {view === "configuration" && <ConfigurationView storageAvailable={storageAvailable} persisted={storageAvailable && hydrated} onMockAi={runMockAssistant} aiLoading={aiLoading} />}
-          {!(["dashboard", "organization", "data", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
+          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
         </div>
       </section>
 
@@ -384,8 +456,8 @@ function DashboardView({ state, organization, period, observations, latestImport
   const sources = new Set(observations.map((item) => item.source)).size;
   return <>
     <section className="welcome-grid">
-      <div className="welcome-card"><div><span className="eyebrow light">FASE 1 · PREPARACIÓN + NÚCLEO + DATOS</span><h2>Un contexto confiable para tomar decisiones.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>DATOS</span><i>AS IS</i><b>IA</b></div></div>
-      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>Base lista para evolucionar</h3><p>La información se guarda en el navegador y permanece separada por organización y periodo.</p><button className="text-button" onClick={() => navigate("configuration")}>Ver configuración →</button></div>
+      <div className="welcome-card"><div><span className="eyebrow light">FASE 2 · CANVAS AS IS + TO BE</span><h2>Un contexto confiable para tomar decisiones.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>DATOS</span><i>AS IS</i><b>IA</b></div></div>
+      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>Canvas listo para evolucionar</h3><p>El modelo actual y las alternativas futuras se guardan por organización, periodo y versión.</p><button className="text-button" onClick={() => navigate("canvas-as-is")}>Abrir Canvas AS IS →</button></div>
     </section>
     <div className="metric-grid">
       <MetricCard label="Organizaciones" value={formatNumber(state.organizations.length, 0)} detail="Contextos registrados" icon="▣" tone="green" />
@@ -432,7 +504,7 @@ function ConfigurationView({ storageAvailable, persisted, onMockAi, aiLoading }:
 }
 
 function FutureModuleView({ meta }: { meta: { eyebrow: string; title: string; description: string } }) {
-  return <section className="future-module"><div className="future-illustration"><span>CM</span><i>✦</i></div><span className="status-pill planned">Fase pendiente</span><h2>{meta.title}</h2><p>{meta.description}</p><div className="phase-boundary"><strong>Este módulo no forma parte de la Fase 1.</strong><span>Se activará después de la aprobación del usuario.</span></div></section>;
+  return <section className="future-module"><div className="future-illustration"><span>CM</span><i>✦</i></div><span className="status-pill planned">Fase pendiente</span><h2>{meta.title}</h2><p>{meta.description}</p><div className="phase-boundary"><strong>Este módulo no forma parte de las fases habilitadas.</strong><span>Se activará cuando corresponda según el plan del proyecto.</span></div></section>;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {

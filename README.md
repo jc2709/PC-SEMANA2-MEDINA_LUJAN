@@ -1,6 +1,6 @@
 # Canvas Model IA
 
-Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa únicamente la Fase 1: preparación, núcleo, organizaciones, periodos, observaciones e importación validada.
+Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa la Fase 1 y la Fase 2: núcleo de datos, Canvas AS IS/TO BE, escenarios, versionado, aprobación y comparación.
 
 El repositorio conserva `vinext` porque ya era el runtime React + TypeScript + Vite del proyecto y ofrece una ruta compatible con el endpoint Vercel preparado en `app/api/ai`.
 
@@ -18,18 +18,19 @@ npm run build
 
 This starter does not use `wrangler.jsonc`.
 
-## Fase 1 incluida
+## Fases 1 y 2 incluidas
 
 - `src/types/`: contratos de dominio.
 - `src/services/storage/`: persistencia local versionada.
 - `src/services/import/`: lectura XLSX/CSV, preview y validación por fila.
 - `src/services/ai/`: abstracción única de IA con fallback MOCK.
+- `src/modules/canvas/`: nueve bloques, elementos, versiones, escenarios, aprobación y comparación.
 - `app/api/ai/`: endpoint server-side preparado para Gemini.
 - `electron/`: contenedor inicial para compartir el mismo build en escritorio.
 - `test-data/`: dataset CSV reproducible de demostración.
 - `docs/`: alcance, arquitectura, manual y evidencias.
 
-Los módulos Canvas, proyectos, Gantt, KPI, predicción, simulación, reportes y PPTX permanecen bloqueados visualmente hasta aprobar la Fase 1.
+Los módulos Proyectos, Gantt, Seguimiento, KPI, Predicción, Simulación, Reportes y PPTX permanecen bloqueados visualmente hasta sus respectivas fases.
 
 ## Workspace Auth Headers
 
@@ -95,7 +96,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm test`: build y pruebas automáticas de contrato de Fase 1
+- `npm test`: build y pruebas automáticas de contrato de Fases 1 y 2
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
 ## Learn More
