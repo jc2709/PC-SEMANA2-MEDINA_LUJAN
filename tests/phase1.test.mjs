@@ -160,11 +160,30 @@ test("la importación CSV conserva caracteres UTF-8", async () => {
 test("la IA está desacoplada y el endpoint no expone secretos al cliente", async () => {
   const aiService = await readFile(new URL("../src/services/ai/aiService.ts", import.meta.url), "utf8");
   const route = await readFile(new URL("../app/api/ai/route.ts", import.meta.url), "utf8");
+  const preload = await readFile(new URL("../electron/preload.cjs", import.meta.url), "utf8");
+  const electronMain = await readFile(new URL("../electron/main.cjs", import.meta.url), "utf8");
   const envExample = await readFile(new URL("../.env.example", import.meta.url), "utf8");
   assert.match(aiService, /\/api\/ai/);
+  assert.match(aiService, /DEFAULT_AI_API_BASE_URL/);
+  assert.match(aiService, /credentials: "omit"/);
   assert.match(route, /process\.env\.GEMINI_API_KEY/);
   assert.match(route, /createMockResponse/);
+  assert.match(route, /export function OPTIONS/);
+  assert.match(route, /Access-Control-Allow-Origin/);
+  assert.match(route, /"null"/);
+  assert.match(preload, /apiBaseUrl/);
+  assert.doesNotMatch(preload, /GEMINI_API_KEY/);
+  assert.match(electronMain, /dist\/electron\/index\.html/);
+  assert.match(electronMain, /canvas-model-ia-medina-lujan\.vercel\.app/);
   assert.doesNotMatch(envExample, /GEMINI_API_KEY=\S+/);
+});
+
+test("Fase 7 genera un HTML autocontenido con assets relativos para file://", async () => {
+  const html = await readFile(new URL("../dist/electron/index.html", import.meta.url), "utf8");
+  assert.match(html, /<script type="module" crossorigin src="\.\/assets\//);
+  assert.match(html, /<link rel="stylesheet" crossorigin href="\.\/assets\//);
+  const renderer = await readFile(new URL("../electron/renderer.tsx", import.meta.url), "utf8");
+  assert.match(renderer, /CanvasModelApp/);
 });
 
 test("Fase 3 genera análisis MOCK contextual y propuestas TO BE trazables", async () => {

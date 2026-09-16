@@ -9,10 +9,10 @@ React + TypeScript (src/CanvasModelApp.tsx)
         └── types              → contratos de dominio
 
 Web (vinext/Vite) ───────────────┐
-                                ├── misma lógica React y de dominio
-Electron (electron/main.cjs) ──┘
+HTML (Vite estático/file://) ────┼── misma lógica React y de dominio
+Electron (main + preload) ──────┘
 
-aiService → POST /api/ai → Gemini solo en servidor / MOCK sin clave
+aiService → URL de API resuelta en runtime → POST /api/ai → Gemini solo en servidor / MOCK sin clave
 ```
 
 Se conserva `vinext` porque el repositorio ya lo usa como runtime Vite compatible con el starter y con el despliegue existente. No se incorpora una base de datos remota en esta fase: el requisito prioritario es operación offline y persistencia local entre sesiones.
@@ -24,6 +24,8 @@ Cada periodo almacena `organizationId`; cada observación almacena `organization
 ## Seguridad IA
 
 El navegador llama a `/api/ai`, nunca a Gemini directamente. La ruta valida operación, organización y contexto; si `GEMINI_API_KEY` no existe o el proveedor falla, responde en modo MOCK. No se agregan buscadores ni scraping.
+
+La web en el mismo dominio usa `/api/ai`. El HTML abierto desde disco y Electron usan `https://canvas-model-ia-medina-lujan.vercel.app/api/ai`; nunca se construye `file:///api/ai`. La función responde el preflight `OPTIONS` y solo refleja estos orígenes: `null`, localhost y el dominio exacto de producción. Como no se envían cookies ni credenciales, no se requiere CORS wildcard.
 
 ## Canvas y versionado
 

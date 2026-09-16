@@ -1,6 +1,6 @@
 # Canvas Model IA
 
-Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa las Fases 1, 2 y 3: núcleo de datos, Canvas AS IS/TO BE, versionado, comparación e inteligencia artificial con revisión humana.
+Sistema local y web para formular y evolucionar el Business Model Canvas. Incluye las Fases 1–6 y la Fase 7 de entrega: núcleo de datos, Canvas AS IS/TO BE, ejecución, analítica, reportes, conexión IA segura y contenedor Electron.
 
 El repositorio conserva `vinext` porque ya era el runtime React + TypeScript + Vite del proyecto y ofrece una ruta compatible con el endpoint Vercel preparado en `app/api/ai`.
 
@@ -14,11 +14,12 @@ El repositorio conserva `vinext` porque ya era el runtime React + TypeScript + V
 npm install
 npm run dev
 npm run build
+npm run build:html
 ```
 
 This starter does not use `wrangler.jsonc`.
 
-## Fases 1, 2 y 3 incluidas
+## Fases incluidas
 
 La Fase 3 añade análisis contextual, propuestas TO BE, revisión humana, historial de decisiones y fallback MOCK. La IA nunca modifica automáticamente una versión aprobada.
 
@@ -28,11 +29,22 @@ La Fase 3 añade análisis contextual, propuestas TO BE, revisión humana, histo
 - `src/services/ai/`: abstracción única de IA con fallback MOCK.
 - `src/modules/canvas/`: nueve bloques, elementos, versiones, escenarios, aprobación y comparación.
 - `app/api/ai/`: endpoint server-side preparado para Gemini.
-- `electron/`: contenedor inicial para compartir el mismo build en escritorio.
+- `electron/`: renderer HTML independiente, `preload` seguro y ventana Electron para el EXE.
 - `test-data/`: dataset CSV reproducible de demostración.
 - `docs/`: alcance, arquitectura, manual y evidencias.
 
-Los módulos Proyectos, Gantt, Seguimiento, KPI, Predicción, Simulación, Reportes y PPTX permanecen bloqueados visualmente hasta sus respectivas fases.
+El endpoint IA solo lee `GEMINI_API_KEY` en Vercel. El cliente web, el HTML local y Electron nunca reciben esa clave: llaman a `/api/ai` en el dominio de Vercel. Si Vercel o Gemini no están disponibles, la aplicación conserva el modo MOCK y las funciones locales.
+
+## Fase 7: web, HTML y EXE
+
+`npm run build` genera la aplicación web para Vercel. `npm run build:html` genera `dist/electron/index.html`, un build estático con assets relativos que puede abrirse con doble clic. Al abrirse desde `file://`, el cliente usa el endpoint público de Vercel y el preflight CORS permitido para el origen `null`.
+
+`npm run package:win:dir` genera una aplicación Windows desempaquetada para QA. `npm run package:win` genera el instalador NSIS y el `.exe` dentro de `release/`. Electron usa `contextIsolation`, `nodeIntegration: false` y expone únicamente `apiBaseUrl`, nunca una credencial.
+
+Variables opcionales de ejecución de escritorio:
+
+- `CANVAS_MODEL_IA_URL`: URL de la aplicación que Electron carga en desarrollo.
+- `CANVAS_MODEL_IA_API_URL`: origen de API no secreto; por defecto es la producción de Vercel.
 
 ## Workspace Auth Headers
 
@@ -98,7 +110,11 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm test`: build y pruebas automáticas de contrato de Fases 1 y 2
+- `npm run build:html`: generar HTML standalone para `file://` y Electron
+- `npm run electron:dev`: abrir el contenedor Electron
+- `npm run package:win:dir`: empaquetar EXE desempaquetado para QA
+- `npm run package:win`: generar instalador Windows
+- `npm test`: build web, build HTML y pruebas automáticas de Fases 1–7
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
 ## Learn More

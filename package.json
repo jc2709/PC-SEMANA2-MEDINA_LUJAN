@@ -2,16 +2,24 @@
   "name": "canvas-model-ia",
   "version": "0.1.0",
   "private": true,
+  "description": "Business Model Canvas con análisis IA seguro",
+  "author": "Canvas Model IA",
+  "main": "electron/main.cjs",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "build:html": "vite --config vite.electron.config.ts build",
+    "build:desktop": "npm run build:html",
     "start": "vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/phase1.test.mjs",
+    "test": "npm run build && npm run build:html && node --experimental-strip-types --test tests/phase1.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "electron:dev": "npm run build:html && electron electron/main.cjs",
+    "package:win:dir": "npm run build:html && electron-builder --win --dir",
+    "package:win": "npm run build:html && electron-builder --win"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -32,6 +40,8 @@
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
     "eslint": "9.39.4",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",
@@ -45,5 +55,23 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "type": "module"
+  "type": "module",
+  "build": {
+    "appId": "pe.canvasmodelia.app",
+    "productName": "Canvas Model IA",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/electron/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
 }

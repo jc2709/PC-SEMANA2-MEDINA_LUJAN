@@ -73,3 +73,16 @@ Evidencia técnica de Fase 4: `npm run build` PASS, `npm run lint` PASS y 13/13 
 | F6-EXP-02 | Reportes | Abrir PPTX generado | El paquete contiene relaciones, layout y XML válidos, incluso sin proyectos | Cubierto por prueba automática OOXML |
 
 Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 15/15 pruebas automáticas PASS. La validación visual local confirmó los módulos KPI, Predicción, Simulación y Reportes sin errores de consola; el exportador PPTX también valida la estructura OOXML del paquete.
+
+## Fase 7
+
+| ID | Módulo | Escenario | Resultado esperado | Resultado |
+| --- | --- | --- | --- | --- |
+| F7-URL-01 | IA | Ejecutar desde web Vercel | Se usa el endpoint de la misma aplicación | Cubierto por resolvedor de URL |
+| F7-CORS-01 | IA | Preflight desde `file://` | Responde HTTP 204 y permite `Origin: null` | Cubierto por handler OPTIONS |
+| F7-HTML-01 | HTML | Abrir `dist/electron/index.html` con doble clic | Carga assets relativos y llama a Vercel | PASS — build estático |
+| F7-ELECTRON-01 | EXE | Abrir renderer empaquetado | Electron carga `dist/electron/index.html` sin pantalla negra | Cubierto por configuración y build |
+| F7-SEC-01 | Seguridad | Inspeccionar cliente y preload | No existe `GEMINI_API_KEY` ni credencial | PASS — prueba de contrato |
+| F7-FALLBACK-01 | Resiliencia | Desconectar Vercel/Gemini | Aparece MOCK y continúan las funciones locales | Cubierto por contrato existente |
+
+Evidencia técnica de Fase 7: `npm run build:html` PASS y pruebas de contrato actualizadas. El empaquetado Windows requiere ejecutar `npm run package:win` en un equipo con el runtime de Electron disponible.

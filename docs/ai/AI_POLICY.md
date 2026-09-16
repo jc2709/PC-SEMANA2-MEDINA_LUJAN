@@ -30,6 +30,8 @@ El servicio recibe la organización activa, el periodo activo, la versión AS IS
 
 El historial se guarda junto al estado local de la aplicación. La API key solo se lee en el endpoint mediante process.env.GEMINI_API_KEY. El frontend no recibe ni almacena el secreto. Las respuestas no se ejecutan como código ni se insertan como HTML.
 
+El mismo contrato funciona en web, HTML y Electron. En Vercel el navegador puede llamar al endpoint relativo; el HTML `file://` y Electron resuelven el origen público de Vercel. La función atiende `OPTIONS` y permite únicamente `Origin: null`, localhost y `https://canvas-model-ia-medina-lujan.vercel.app`. No se envían cookies, tokens ni credenciales desde el cliente.
+
 ## Fallback
 
 Cuando la clave no existe, Gemini responde con error o el endpoint no está disponible, se utiliza una respuesta MOCK contextual y se informa: Servicio de IA no disponible. Las funciones locales continúan operativas.

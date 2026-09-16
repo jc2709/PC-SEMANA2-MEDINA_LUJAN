@@ -3,6 +3,34 @@ import { createMockResponse, normalizeAiResponse, type AiOperation } from "../..
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
 const GEMINI_TIMEOUT_MS = 60000;
+const ALLOWED_CORS_ORIGINS = new Set([
+  "null", // HTML local and Electron file:// renderer.
+  "https://canvas-model-ia-medina-lujan.vercel.app",
+  "http://localhost",
+  "http://localhost:3000",
+  "http://127.0.0.1",
+  "http://127.0.0.1:3000",
+]);
+
+function corsHeaders(request?: Request) {
+  const headers = new Headers({
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+  });
+  const origin = request?.headers.get("origin");
+  if (origin && ALLOWED_CORS_ORIGINS.has(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Vary", "Origin");
+  }
+  return headers;
+}
+
+function jsonResponse(data: unknown, init?: ResponseInit, request?: Request) {
+  const response = NextResponse.json(data, init);
+  for (const [name, value] of corsHeaders(request).entries()) response.headers.set(name, value);
+  return response;
+}
 
 const ALLOWED_OPERATIONS = new Set<AiOperation>([
   "analizarCanvas",
@@ -73,34 +101,39 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Payload JSON inválido." }, { status: 400 });
+    return jsonResponse({ error: "Payload JSON inválido." }, { status: 400 }, request);
   }
 
-  if (!body || typeof body !== "object") return NextResponse.json({ error: "El payload debe ser un objeto." }, { status: 400 });
+  if (!body || typeof body !== "object") return jsonResponse({ error: "El payload debe ser un objeto." }, { status: 400 }, request);
   const payload = body as { operation?: unknown; organizationId?: unknown; context?: unknown };
-  if (typeof payload.operation !== "string" || !ALLOWED_OPERATIONS.has(payload.operation as AiOperation)) return NextResponse.json({ error: "Operación de IA no permitida." }, { status: 400 });
-  if (typeof payload.organizationId !== "string" || !payload.organizationId.trim()) return NextResponse.json({ error: "organizationId es obligatorio." }, { status: 400 });
-  if (!payload.context || typeof payload.context !== "object" || Array.isArray(payload.context)) return NextResponse.json({ error: "context debe ser un objeto." }, { status: 400 });
+  if (typeof payload.operation !== "string" || !ALLOWED_OPERATIONS.has(payload.operation as AiOperation)) return jsonResponse({ error: "Operación de IA no permitida." }, { status: 400 }, request);
+  if (typeof payload.organizationId !== "string" || !payload.organizationId.trim()) return jsonResponse({ error: "organizationId es obligatorio." }, { status: 400 }, request);
+  if (!payload.context || typeof payload.context !== "object" || Array.isArray(payload.context)) return jsonResponse({ error: "context debe ser un objeto." }, { status: 400 }, request);
 
   const operation = payload.operation as AiOperation;
   const context = payload.context as Record<string, unknown>;
   const contextJson = JSON.stringify(context);
-  if (contextJson.length > 120000) return NextResponse.json({ error: "El contexto IA supera el tamaño permitido." }, { status: 413 });
+  if (contextJson.length > 120000) return jsonResponse({ error: "El contexto IA supera el tamaño permitido." }, { status: 413 }, request);
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json(createMockResponse(operation, context), { headers: { "x-ai-mode": "mock" } });
+  if (!apiKey) return jsonResponse(createMockResponse(operation, context), { headers: { "x-ai-mode": "mock" } }, request);
 
   try {
     const geminiResponse = await requestGemini(apiKey, logicalPrompt(operation, context));
-    if (!geminiResponse) return NextResponse.json(createMockResponse(operation, context, "Gemini no devolvió respuesta"), { headers: { "x-ai-mode": "mock" } });
-    if (!geminiResponse.ok) return NextResponse.json(createMockResponse(operation, context, "Gemini respondió HTTP " + geminiResponse.status), { headers: { "x-ai-mode": "mock" } });
+    if (!geminiResponse) return jsonResponse(createMockResponse(operation, context, "Gemini no devolvió respuesta"), { headers: { "x-ai-mode": "mock" } }, request);
+    if (!geminiResponse.ok) return jsonResponse(createMockResponse(operation, context, "Gemini respondió HTTP " + geminiResponse.status), { headers: { "x-ai-mode": "mock" } }, request);
     const result: unknown = await geminiResponse.json();
     const candidateText = (((result as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]?.content?.parts ?? []).map((part) => part.text ?? "").join("\\n")).trim();
     const parsed = parseJsonText(candidateText);
     const normalized = normalizeAiResponse({ ...(parsed && typeof parsed === "object" ? parsed : {}), mode: "REAL" }, operation);
-    if (!normalized) return NextResponse.json(createMockResponse(operation, context, "Gemini devolvió una respuesta no validable"), { headers: { "x-ai-mode": "mock" } });
-    return NextResponse.json(normalized);
+    if (!normalized) return jsonResponse(createMockResponse(operation, context, "Gemini devolvió una respuesta no validable"), { headers: { "x-ai-mode": "mock" } }, request);
+    return jsonResponse(normalized, undefined, request);
   } catch {
-    return NextResponse.json(createMockResponse(operation, context, "error de conexión o respuesta no validable"), { headers: { "x-ai-mode": "mock" } });
+    return jsonResponse(createMockResponse(operation, context, "error de conexión o respuesta no validable"), { headers: { "x-ai-mode": "mock" } }, request);
   }
+}
+
+// Handles browser preflight for JSON requests from a file:// or Electron renderer.
+export function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
 }
