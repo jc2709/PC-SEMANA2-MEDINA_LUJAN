@@ -70,5 +70,6 @@ Evidencia técnica de Fase 4: `npm run build` PASS, `npm run lint` PASS y 13/13 
 | F5-SIM-01 | Simulación | Cambiar variables BASE vs ESCENARIO | Se calculan impacto absoluto y porcentual con reglas transparentes | Cubierto por servicio y prueba visual |
 | F6-DASH-01 | Dashboard | Revisar real, meta, proyectado y presupuesto | Las cifras proceden del estado persistido | Cubierto por UI y prueba visual |
 | F6-EXP-01 | Reportes | Exportar CSV, Excel y PPTX | Se descarga un paquete con datos del contexto activo | Cubierto por UI y manual |
+| F6-EXP-02 | Reportes | Abrir PPTX generado | El paquete contiene relaciones, layout y XML válidos, incluso sin proyectos | Cubierto por prueba automática OOXML |
 
-Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 14/14 pruebas automáticas PASS. La validación visual local confirmó los módulos KPI, Predicción, Simulación y Reportes sin errores de consola.
+Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 15/15 pruebas automáticas PASS. La validación visual local confirmó los módulos KPI, Predicción, Simulación y Reportes sin errores de consola; el exportador PPTX también valida la estructura OOXML del paquete.

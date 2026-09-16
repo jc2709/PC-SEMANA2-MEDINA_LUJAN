@@ -82,6 +82,46 @@ test("Fase 5 calcula pronósticos reproducibles y marca historial insuficiente",
   assert.notEqual(results[0].scenarioValue, results[0].baseValue);
 });
 
+test("el exportador PPTX genera un paquete OOXML compatible y con contenido vacío válido", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const { buildReportPptxBlob } = await import(new URL("../src/services/export/exportService.ts", import.meta.url).href);
+  const state = createDemoState();
+  const blob = buildReportPptxBlob({
+    organization: state.organizations[0],
+    period: state.periods[1],
+    canvasAsIs: state.canvasVersions.find((item) => item.kind === "AS_IS"),
+    canvasToBe: state.canvasVersions.find((item) => item.kind === "TO_BE"),
+    definitions: state.kpiDefinitions,
+    observations: state.observations,
+    forecasts: state.forecasts,
+    projects: [],
+    tasks: [],
+    milestones: [],
+    tracking: [],
+  });
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const view = new DataView(bytes.buffer);
+  assert.equal(view.getUint32(0, true), 0x04034b50);
+  assert.equal(view.getUint32(bytes.length - 22, true), 0x06054b50);
+  const decoder = new TextDecoder();
+  const files = new Map();
+  let offset = 0;
+  while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
+    const nameLength = view.getUint16(offset + 26, true);
+    const extraLength = view.getUint16(offset + 28, true);
+    const size = view.getUint32(offset + 18, true);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const name = decoder.decode(bytes.slice(nameStart, dataStart));
+    files.set(name, decoder.decode(bytes.slice(dataStart, dataStart + size)));
+    offset = dataStart + size;
+  }
+  assert.match(files.get("ppt/presentation.xml"), /<p:sldId id="261" r:id="rId7"\/>/);
+  assert.match(files.get("ppt/slideLayouts/slideLayout1.xml"), /type="blank"/);
+  assert.match(files.get("ppt/slides/slide1.xml"), /<a:prstGeom prst="rect">/);
+  assert.match(files.get("ppt/slides/slide4.xml"), /Sin datos registrados en este contexto/);
+});
+
 test("la persistencia guarda respaldo y recupera si el snapshot principal se corrompe", async () => {
   const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
   const { loadState, saveState, STORAGE_KEY, STORAGE_BACKUP_KEY } = await import(new URL("../src/services/storage/storage.ts", import.meta.url).href);

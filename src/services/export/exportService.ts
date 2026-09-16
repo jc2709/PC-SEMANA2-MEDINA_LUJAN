@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import type { CanvasVersion, HistoricalObservation, KpiDefinition, KpiForecast, Organization, Period, Project, ProjectMilestone, ProjectTask, ProjectTrackingEntry } from "../../types/domain";
-import { formatNumber } from "../../utils/format";
+import { formatNumber } from "../../utils/format.ts";
 
 export type ReportData = {
   organization?: Organization;
@@ -63,8 +63,21 @@ function escapeXml(value: unknown) {
 }
 
 function slideXml(title: string, bullets: string[]) {
-  const paragraphs = bullets.map((bullet) => `<a:p><a:pPr marL="342900" indent="-171450"><a:buChar char="•"/></a:pPr><a:r><a:rPr lang="es-PE" sz="1800"/><a:t>${escapeXml(bullet)}</a:t></a:r><a:endParaRPr lang="es-PE"/></a:p>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="es-PE" sz="2800" b="1"/><a:t>${escapeXml(title)}</a:t></a:r><a:endParaRPr lang="es-PE"/></a:p></p:txBody></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Content"/><p:cNvSpPr/><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>${paragraphs}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+  const safeBullets = bullets.length ? bullets : ["Sin datos registrados en este contexto."];
+  const paragraphs = safeBullets.map((bullet) => `<a:p><a:r><a:rPr lang="es-PE" sz="1500"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escapeXml(bullet)}</a:t></a:r><a:endParaRPr lang="es-PE" sz="1500"/></a:p>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="F4F7FA"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="2" name="Título"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="610000" y="430000"/><a:ext cx="10900000" cy="900000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"/><a:lstStyle/><a:p><a:r><a:rPr lang="es-PE" sz="2600" b="1"><a:solidFill><a:srgbClr val="0B1D33"/></a:solidFill></a:rPr><a:t>${escapeXml(title)}</a:t></a:r><a:endParaRPr lang="es-PE" sz="2600"/></a:p></p:txBody></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Contenido"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="760000" y="1550000"/><a:ext cx="10600000" cy="4300000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square"/><a:lstStyle/>${paragraphs}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+}
+
+function slideMasterXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:sldLayoutIdLst><p:sldLayoutId id="1" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>`;
+}
+
+function slideLayoutXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1"><p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt x="0" y="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld></p:sldLayout>`;
+}
+
+function presentationXml(slideCount: number) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${Array.from({ length: slideCount }, (_, index) => `<p:sldId id="${256 + index}" r:id="rId${index + 2}"/>`).join("")}</p:sldIdLst><p:sldSz cx="12192000" cy="6858000" type="screen16x9"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
 }
 
 function relationshipXml(targets: Array<{ id: string; type: string; target: string }>) {
@@ -109,7 +122,7 @@ function zipStore(files: Record<string, string>) {
   return new Blob([...chunks, ...central, end], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
 }
 
-export function downloadReportPptx(data: ReportData) {
+export function buildReportPptxBlob(data: ReportData) {
   const rows = buildReportRows(data);
   const actual = data.observations.at(-1)?.value ?? 0;
   const slides = [
@@ -133,6 +146,13 @@ export function downloadReportPptx(data: ReportData) {
     "ppt/slideLayouts/_rels/slideLayout1.xml.rels": relationshipXml([{ id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster", target: "../slideMasters/slideMaster1.xml" }]),
     "ppt/theme/theme1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Canvas Model IA"><a:themeElements><a:clrScheme name="Canvas"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F352B"/></a:dk2><a:lt2><a:srgbClr val="F7FAF8"/></a:lt2><a:accent1><a:srgbClr val="4D9672"/></a:accent1><a:accent2><a:srgbClr val="D7A548"/></a:accent2><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="Canvas"><a:majorFont><a:latin typeface="Aptos Display"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/></a:minorFont></a:fontScheme><a:fmtScheme name="Canvas"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme></a:themeElements></a:theme>`,
   };
+  files["ppt/presentation.xml"] = presentationXml(slides.length);
+  files["ppt/slideMasters/slideMaster1.xml"] = slideMasterXml();
+  files["ppt/slideLayouts/slideLayout1.xml"] = slideLayoutXml();
   slides.forEach(([title, bullets], index) => { files[`ppt/slides/slide${index + 1}.xml`] = slideXml(title, bullets); files[`ppt/slides/_rels/slide${index + 1}.xml.rels`] = relationshipXml([{ id: "rId1", type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", target: "../slideLayouts/slideLayout1.xml" }]); });
-  triggerDownload(zipStore(files), `canvas-model-ia-reporte-${data.period?.code ?? "general"}.pptx`);
+  return zipStore(files);
+}
+
+export function downloadReportPptx(data: ReportData) {
+  triggerDownload(buildReportPptxBlob(data), `canvas-model-ia-reporte-${data.period?.code ?? "general"}.pptx`);
 }
