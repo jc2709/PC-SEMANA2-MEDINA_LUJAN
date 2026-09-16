@@ -18,8 +18,10 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel",
     "db:generate": "drizzle-kit generate",
     "electron:dev": "npm run build:html && electron electron/main.cjs",
-    "package:win:dir": "npm run build:html && electron-builder --win --dir",
-    "package:win": "npm run build:html && electron-builder --win"
+    "build:exe": "npm run build:html && electron-builder --win portable --x64",
+    "build:exe:unpacked": "npm run build:html && electron-builder --win --x64 --dir",
+    "verify:exe": "node scripts/verify-exe.mjs",
+    "package:final": "npm run build:exe && npm run verify:exe"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -53,6 +55,7 @@
     "typescript-eslint": "8.59.3",
     "vinext": "1.0.0-beta.2",
     "vite": "8.0.13",
+    "vite-plugin-singlefile": "^2.3.3",
     "wrangler": "4.92.0"
   },
   "type": "module",
@@ -70,8 +73,14 @@
     "asar": true,
     "win": {
       "target": [
-        "nsis"
-      ]
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Canvas-Model-IA-portable-${version}-${arch}.${ext}"
     }
   }
 }

@@ -178,10 +178,12 @@ test("la IA está desacoplada y el endpoint no expone secretos al cliente", asyn
   assert.doesNotMatch(envExample, /GEMINI_API_KEY=\S+/);
 });
 
-test("Fase 7 genera un HTML autocontenido con assets relativos para file://", async () => {
+test("Fase 7 genera un HTML autocontenido con CSP para la IA pública", async () => {
   const html = await readFile(new URL("../dist/electron/index.html", import.meta.url), "utf8");
-  assert.match(html, /<script type="module" crossorigin src="\.\/assets\//);
-  assert.match(html, /<link rel="stylesheet" crossorigin href="\.\/assets\//);
+  assert.ok(html.includes('<script type="module" crossorigin>'), "Falta el JavaScript integrado.");
+  assert.ok(html.includes('<style rel="stylesheet" crossorigin>'), "Falta el CSS integrado.");
+  assert.ok(!/(?:src|href)="\.\/assets\//.test(html), "El HTML sigue dependiendo de assets externos.");
+  assert.ok(/connect-src[^"]*https:\/\/canvas-model-ia-medina-lujan\.vercel\.app/.test(html), "La CSP bloquea Vercel.");
   const renderer = await readFile(new URL("../electron/renderer.tsx", import.meta.url), "utf8");
   assert.match(renderer, /CanvasModelApp/);
 });

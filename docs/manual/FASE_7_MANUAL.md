@@ -22,11 +22,13 @@ Comprobar que web, HTML y EXE comparten la interfaz y pueden solicitar IA a Verc
 
 ## 3. Validar el EXE
 
-1. Ejecuta `npm run package:win:dir`.
-2. Abre el ejecutable dentro de `release/win-unpacked/`.
+1. Ejecuta `npm run package:final`.
+2. Copia únicamente `release/Canvas-Model-IA-portable-0.1.0-x64.exe` a otra carpeta y ábrelo. No copies `win-unpacked`.
 3. Repite la carga demo y la operación IA.
 4. Cierra y vuelve a abrir la aplicación; confirma que la organización, observaciones, Canvas y decisiones siguen presentes.
 5. Si Vercel no responde, confirma que los módulos locales aún permiten editar, guardar, exportar y consultar el modo MOCK.
+
+El EXE incluye Electron y no requiere instalar Node.js, npm o Python en la computadora de destino. `release/win-unpacked/` queda como respaldo para diagnóstico.
 
 ## 4. Validar el preflight
 
@@ -49,6 +51,6 @@ Resultado esperado: HTTP `204`, `Access-Control-Allow-Origin: null`, métodos `P
 
 - Se solicita `file:///api/ai`.
 - El navegador muestra un bloqueo CORS.
-- El EXE busca un `dist/index.html` inexistente o muestra una pantalla negra.
+- El EXE muestra una pantalla negra, exige copiar `win-unpacked` o deja archivos auxiliares visibles junto al portable.
 - `GEMINI_API_KEY` aparece en HTML, JavaScript cliente, `preload`, Electron o Git.
 - Una falla de Vercel impide usar las funciones locales o el fallback MOCK.

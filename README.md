@@ -37,9 +37,9 @@ El endpoint IA solo lee `GEMINI_API_KEY` en Vercel. El cliente web, el HTML loca
 
 ## Fase 7: web, HTML y EXE
 
-`npm run build` genera la aplicación web para Vercel. `npm run build:html` genera `dist/electron/index.html`, un build estático con assets relativos que puede abrirse con doble clic. Al abrirse desde `file://`, el cliente usa el endpoint público de Vercel y el preflight CORS permitido para el origen `null`.
+`npm run build` genera la aplicación web para Vercel. `npm run build:html` genera `dist/electron/index.html` como un único archivo con JavaScript y CSS integrados. Al abrirse desde `file://`, el cliente usa el endpoint público de Vercel y la CSP autoriza ese dominio en `connect-src`.
 
-`npm run package:win:dir` genera una aplicación Windows desempaquetada para QA. `npm run package:win` genera el instalador NSIS y el `.exe` dentro de `release/`. Electron usa `contextIsolation`, `nodeIntegration: false` y expone únicamente `apiBaseUrl`, nunca una credencial.
+`npm run build:exe` genera `release/Canvas-Model-IA-portable-0.1.0-x64.exe`: un EXE portátil que puede moverse solo a otra carpeta. El build también conserva `release/win-unpacked/` como respaldo. `npm run build:exe:unpacked` reconstruye únicamente ese respaldo. `npm run verify:exe` copia solo el EXE a una carpeta aislada, abre la aplicación, recorre sus módulos y comprueba que el análisis IA obtiene HTTP 200 y una respuesta REAL. `npm run package:final` construye y verifica todo. Electron usa `contextIsolation`, `nodeIntegration: false` y expone únicamente `apiBaseUrl`, nunca una credencial.
 
 Variables opcionales de ejecución de escritorio:
 
@@ -110,10 +110,12 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm run build:html`: generar HTML standalone para `file://` y Electron
+- `npm run build:html`: generar un único HTML standalone para `file://` y Electron
 - `npm run electron:dev`: abrir el contenedor Electron
-- `npm run package:win:dir`: empaquetar EXE desempaquetado para QA
-- `npm run package:win`: generar instalador Windows
+- `npm run build:exe`: generar el EXE portátil x64 y `win-unpacked`
+- `npm run build:exe:unpacked`: regenerar el respaldo desempaquetado
+- `npm run verify:exe`: probar el EXE como único archivo en una carpeta aislada
+- `npm run package:final`: construir y verificar la entrega
 - `npm test`: build web, build HTML y pruebas automáticas de Fases 1–7
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 

@@ -80,9 +80,9 @@ Evidencia técnica de Fases 5–6: `npm run build` PASS, `npm run lint` PASS y 1
 | --- | --- | --- | --- | --- |
 | F7-URL-01 | IA | Ejecutar desde web Vercel | Se usa el endpoint de la misma aplicación | Cubierto por resolvedor de URL |
 | F7-CORS-01 | IA | Preflight desde `file://` | Responde HTTP 204 y permite `Origin: null` | Cubierto por handler OPTIONS |
-| F7-HTML-01 | HTML | Abrir `dist/electron/index.html` con doble clic | Carga assets relativos y llama a Vercel | PASS — build estático |
-| F7-ELECTRON-01 | EXE | Abrir renderer empaquetado | Electron carga `dist/electron/index.html` sin pantalla negra | Cubierto por configuración y build |
+| F7-HTML-01 | HTML | Abrir `dist/electron/index.html` con doble clic | Renderiza sin archivos auxiliares y permite llamar a Vercel | PASS — Vite single-file y CSP; apertura en navegador pendiente de validación manual |
+| F7-ELECTRON-01 | EXE | Copiar solo el portable a una carpeta aislada | Carga la interfaz, 16 módulos e IA REAL sin archivos auxiliares visibles | PASS — `npm run verify:exe` |
 | F7-SEC-01 | Seguridad | Inspeccionar cliente y preload | No existe `GEMINI_API_KEY` ni credencial | PASS — prueba de contrato |
 | F7-FALLBACK-01 | Resiliencia | Desconectar Vercel/Gemini | Aparece MOCK y continúan las funciones locales | Cubierto por contrato existente |
 
-Evidencia técnica de Fase 7: `npm run build:html` PASS, `npm run package:win:dir` PASS (generó `release/win-unpacked/Canvas Model IA.exe`), 16/16 pruebas automáticas PASS y lint PASS. La prueba remota confirmó preflight `Origin: null` HTTP 204 y POST IA HTTP 200 en modo REAL.
+Evidencia técnica de Fase 7: `npm run package:final` PASS. Generó un único HTML y el portable x64 con respaldo `win-unpacked`; `verify:exe` confirmó desde una carpeta aislada 16 módulos, API HTTP 200 y respuesta GEMINI REAL. `npm run lint` PASS y 16/16 pruebas automáticas PASS. La prueba remota previa confirmó preflight `Origin: null` HTTP 204.
