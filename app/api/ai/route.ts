@@ -63,9 +63,9 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json(createMockResponse(operation, context), { headers: { "x-ai-mode": "mock" } });
 
   try {
-    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(GEMINI_MODEL) + ":generateContent?key=" + encodeURIComponent(apiKey), {
+    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(GEMINI_MODEL) + ":generateContent", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: logicalPrompt(operation, context) }] }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
