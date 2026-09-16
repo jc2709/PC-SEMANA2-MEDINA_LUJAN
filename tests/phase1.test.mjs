@@ -23,7 +23,15 @@ test("la importación CSV valida filas y reconoce columnas del dataset", async (
   const preview = await parseDataFile(file, [{ id: "p", organizationId: "o", code: "2026-09", label: "Septiembre 2026", startsOn: "2026-09-01", endsOn: "2026-09-30" }]);
   assert.deepEqual(previewStats(preview), { processedRows: 2, validRows: 1, invalidRows: 1 });
   assert.equal(preview.rows[0].draft.kpi, "Ventas");
+  assert.equal(preview.rows[0].raw.KPI, "Ventas");
   assert.match(preview.rows[1].errors[0].message, /numérico/);
+});
+
+test("la importación CSV conserva caracteres UTF-8", async () => {
+  const { parseDataFile } = await import(new URL("../src/services/import/importService.ts", import.meta.url).href);
+  const file = new File(["KPI,Periodo,Valor,Unidad,Fuente,Calidad,Fecha\nConversión,2026-09,4.1,%,Embudo,MEDIA,2026-09-30"], "utf8.csv", { type: "text/csv" });
+  const preview = await parseDataFile(file, [{ id: "p", organizationId: "o", code: "2026-09", label: "Septiembre 2026", startsOn: "2026-09-01", endsOn: "2026-09-30" }]);
+  assert.equal(preview.rows[0].draft.kpi, "Conversión");
 });
 
 test("la IA está desacoplada y el endpoint no expone secretos al cliente", async () => {

@@ -92,7 +92,11 @@ function periodCode(value: unknown, periods: Period[]) {
 }
 
 export async function parseDataFile(file: File, periods: Period[]): Promise<ImportPreview> {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const fileBuffer = await file.arrayBuffer();
+  const isCsv = /\.csv$/i.test(file.name) || file.type.toLowerCase().includes("csv");
+  const workbook = isCsv
+    ? XLSX.read(new TextDecoder("utf-8").decode(fileBuffer), { type: "string", cellDates: true })
+    : XLSX.read(fileBuffer, { type: "array", cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) throw new Error("El archivo no contiene una hoja de datos.");
 
