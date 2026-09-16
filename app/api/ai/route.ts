@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createMockResponse, normalizeAiResponse, type AiOperation } from "../../../src/services/ai/aiModel";
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+
 const ALLOWED_OPERATIONS = new Set<AiOperation>([
   "analizarCanvas",
   "detectarInconsistencias",
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json(createMockResponse(operation, context), { headers: { "x-ai-mode": "mock" } });
 
   try {
-    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + encodeURIComponent(apiKey), {
+    const geminiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(GEMINI_MODEL) + ":generateContent?key=" + encodeURIComponent(apiKey), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
