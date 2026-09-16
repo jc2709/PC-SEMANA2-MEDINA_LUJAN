@@ -1,6 +1,6 @@
 # Canvas Model IA
 
-Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa la Fase 1 y la Fase 2: núcleo de datos, Canvas AS IS/TO BE, escenarios, versionado, aprobación y comparación.
+Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa las Fases 1, 2 y 3: núcleo de datos, Canvas AS IS/TO BE, versionado, comparación e inteligencia artificial con revisión humana.
 
 El repositorio conserva `vinext` porque ya era el runtime React + TypeScript + Vite del proyecto y ofrece una ruta compatible con el endpoint Vercel preparado en `app/api/ai`.
 
@@ -18,7 +18,9 @@ npm run build
 
 This starter does not use `wrangler.jsonc`.
 
-## Fases 1 y 2 incluidas
+## Fases 1, 2 y 3 incluidas
+
+La Fase 3 añade análisis contextual, propuestas TO BE, revisión humana, historial de decisiones y fallback MOCK. La IA nunca modifica automáticamente una versión aprobada.
 
 - `src/types/`: contratos de dominio.
 - `src/services/storage/`: persistencia local versionada.

@@ -27,6 +27,14 @@ El navegador llama a `/api/ai`, nunca a Gemini directamente. La ruta valida oper
 
 ## Canvas y versionado
 
+## Flujo de propuestas IA — Fase 3
+
+La pantalla Análisis IA construye un contexto con organización, periodo, observaciones y una versión AS IS. aiService envía ese contexto a POST /api/ai. La ruta valida la operación y la respuesta se normaliza antes de renderizarla.
+
+El modo MOCK se genera localmente con reglas deterministas cuando Gemini no está configurado o no responde. Para una respuesta real, la clave permanece en el servidor y Gemini recibe instrucciones para devolver JSON estructurado. La respuesta nunca se aplica automáticamente.
+
+Aceptar o editar una propuesta usa el AS IS como origen y crea una nueva versión TO BE en BORRADOR. Rechazar solo actualiza el historial IA. La referencia entre versiones se conserva mediante sourceVersionId y la decisión mediante decision y decisionAt.
+
 `CanvasVersion` pertenece a una organización y periodo, y contiene elementos de uno de los nueve bloques. AS IS y TO BE son tipos independientes. Un elemento clonado conserva `sourceElementId` para que la comparación pueda clasificarlo como `MODIFICAR` o `MANTENER`; los elementos sin origen se clasifican como `CREAR` y los ausentes en TO BE como `ELIMINAR`.
 
 Los estados siguen el flujo `BORRADOR → EN_REVISION → APROBADO`. Una versión aprobada no muestra controles de edición; para modificarla se crea una copia editable con una nueva versión. Los escenarios también pertenecen al contexto organización-periodo y no comparten elementos entre sí.

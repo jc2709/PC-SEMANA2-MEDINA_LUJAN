@@ -29,4 +29,18 @@ Evidencia de cierre: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS 
 | F2-COMP-01 | Comparación | Comparar AS IS vs TO BE | Clasifica CREAR, MODIFICAR, ELIMINAR y MANTENER | PASS — navegador local |
 | F2-PER-01 | Persistencia | Recargar Canvas | Versiones, elementos y estados permanecen | PASS — persistencia versionada |
 
+## Fase 3
+
+| ID | Módulo | Escenario | Resultado esperado | Resultado |
+| --- | --- | --- | --- | --- |
+| F3-AI-01 | Análisis IA | Analizar Canvas AS IS | Se muestran hallazgos clasificados y contextualizados | PASS — MOCK contextual y prueba automática |
+| F3-AI-02 | Propuesta TO BE | Generar alternativa | Se muestra una propuesta pendiente sin crear versión automática | PASS — modelo y UI |
+| F3-AI-03 | Decisión | Aceptar propuesta | Se crea TO BE nuevo en BORRADOR con referencia al AS IS | PASS — función pura y flujo implementado |
+| F3-AI-04 | Decisión | Editar antes de aplicar | Se crea TO BE con campos revisados y decisión EDITADA | PASS — flujo UI implementado |
+| F3-AI-05 | Decisión | Rechazar propuesta | No se modifica Canvas ni se crea versión | PASS — handler implementado |
+| F3-AI-06 | Fallback | Sin clave o sin endpoint | Se muestra MOCK y las funciones locales continúan | PASS — contrato y fallback implementados |
+| F3-AI-07 | Historial | Guardar decisión | Se conserva operación, modo, respuesta y decisión | PASS — estado local versionado |
+
+Evidencia de cierre de Fase 3: build PASS, lint PASS y 10/10 pruebas automáticas PASS. La validación visual final queda documentada en el manual de Fase 3.
+
 Evidencia de cierre de Fase 2: `npm run build` PASS, `npm run lint` PASS, `npm test` PASS (8/8 pruebas). La prueba visual confirmó creación, edición, clonación, comparación y aprobación sin errores de consola.

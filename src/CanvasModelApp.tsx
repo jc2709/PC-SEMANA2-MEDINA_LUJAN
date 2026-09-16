@@ -3,11 +3,13 @@
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createDemoState } from "./data/demoData";
-import { aiService, type AiResponse } from "./services/ai/aiService";
+import { aiService } from "./services/ai/aiService";
+import { buildToBeFromAi, type AiDecision, type AiElementProposal, type AiOperation, type AiResponse } from "./services/ai/aiModel";
 import { parseDataFile, previewStats, type ImportPreview } from "./services/import/importService";
 import { loadState, saveState } from "./services/storage/storage";
 import { CanvasComparisonView, CanvasEditorView, type CanvasElementDraft, type CanvasScenarioDraft, type CanvasVersionDraft } from "./modules/canvas/CanvasModule";
-import type { AppState, AppView, CanvasKind, CanvasStatus, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
+import { AiAnalysisView } from "./modules/ai/AiModule";
+import type { AppState, AppView, CanvasKind, CanvasStatus, CanvasVersion, DataQuality, Organization, OrganizationSize, Period, Sector } from "./types/domain";
 import { formatCurrency, formatDate, formatNumber, makeId, todayInputValue } from "./utils/format";
 
 type Modal = "organization" | "edit-organization" | "period" | "edit-period" | "edit-observation" | null;
@@ -19,6 +21,7 @@ const navigation: Array<{ id: AppView; label: string; icon: string; phase?: stri
   { id: "canvas-as-is", label: "Canvas AS IS", icon: "▦" },
   { id: "canvas-to-be", label: "Canvas TO BE", icon: "◇" },
   { id: "comparison", label: "Comparación", icon: "⇄" },
+  { id: "ai-analysis", label: "Análisis IA", icon: "✦", phase: "F3" },
   { id: "projects", label: "Proyectos", icon: "□", phase: "F4" },
   { id: "gantt", label: "Gantt", icon: "▥", phase: "F4" },
   { id: "tracking", label: "Seguimiento", icon: "◷", phase: "F4" },
@@ -44,6 +47,7 @@ const viewMeta: Record<AppView, { eyebrow: string; title: string; description: s
   prediction: { eyebrow: "ANALÍTICA / PRONÓSTICO", title: "Predicción", description: "El motor predictivo local se habilitará en la Fase 5." },
   simulation: { eyebrow: "ANALÍTICA / ESCENARIOS", title: "Simulación", description: "El simulador se habilitará en la Fase 5." },
   reports: { eyebrow: "SALIDAS / EVIDENCIA", title: "Reportes", description: "Los reportes y exportaciones se habilitarán en la Fase 6." },
+  "ai-analysis": { eyebrow: "IA / PROPUESTAS", title: "Análisis IA", description: "Analiza el AS IS y revisa propuestas TO BE antes de aplicarlas." },
   "ai-history": { eyebrow: "IA / TRAZABILIDAD", title: "Historial IA", description: "Consulta las propuestas y decisiones registradas por el usuario." },
   configuration: { eyebrow: "SISTEMA / CONFIGURACIÓN", title: "Configuración", description: "Estado de almacenamiento, modo IA y decisiones técnicas de esta entrega." },
 };
@@ -62,6 +66,7 @@ export default function CanvasModelApp() {
   const [importing, setImporting] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState<AiResponse | null>(null);
+  const [lastAiHistoryId, setLastAiHistoryId] = useState<string | null>(null);
   const [editingOrganizationId, setEditingOrganizationId] = useState<string | null>(null);
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [editingObservationId, setEditingObservationId] = useState<string | null>(null);
@@ -125,10 +130,14 @@ export default function CanvasModelApp() {
 
   function chooseOrganization(organizationId: string) {
     const firstPeriod = state.periods.find((item) => item.organizationId === organizationId);
+    setLastAiResponse(null);
+    setLastAiHistoryId(null);
     commitState((current) => ({ ...current, activeOrganizationId: organizationId, activePeriodId: firstPeriod?.id ?? "" }));
   }
 
   function choosePeriod(periodId: string) {
+    setLastAiResponse(null);
+    setLastAiHistoryId(null);
     commitState((current) => ({ ...current, activePeriodId: periodId }));
   }
 
@@ -374,14 +383,86 @@ export default function CanvasModelApp() {
     notify(`Importación confirmada: ${stats.validRows} filas válidas.`);
   }
 
-  async function runMockAssistant() {
-    if (!activeOrganization) return;
+  function aiContext(sourceVersion: CanvasVersion) {
+    return { organization: activeOrganization, period: activePeriod, canvas: sourceVersion, observations: activeObservations };
+  }
+
+  function registerAiResponse(sourceVersion: CanvasVersion, response: AiResponse) {
+    const contextualResponse = { ...response, sourceVersionId: sourceVersion.id };
+    const historyId = makeId("ai");
+    commitState((current) => ({ ...current, aiHistory: [{ id: historyId, organizationId: sourceVersion.organizationId, module: "Fase 3", operation: response.operation, logicalPrompt: "Operación " + response.operation + " sobre el Canvas AS IS seleccionado; usar únicamente contexto local y no modificar datos aprobados.", model: response.mode === "MOCK" ? "MOCK" : "Gemini", response: JSON.stringify(contextualResponse), decision: "PENDIENTE", createdAt: response.generatedAt, sourceVersionId: sourceVersion.id }, ...current.aiHistory] }));
+    setLastAiResponse(contextualResponse);
+    setLastAiHistoryId(historyId);
+    return contextualResponse;
+  }
+
+  async function runAiOperation(operation: Extract<AiOperation, "analizarCanvas" | "detectarInconsistencias" | "generarToBe">, sourceVersionId: string) {
+    if (!activeOrganization || !activePeriod) {
+      notify("Selecciona una organización y periodo antes de ejecutar IA.");
+      return;
+    }
+    const sourceVersion = state.canvasVersions.find((item) => item.id === sourceVersionId && item.organizationId === activeOrganization.id && item.periodId === activePeriod.id && item.kind === "AS_IS");
+    if (!sourceVersion) {
+      notify("Crea o selecciona un Canvas AS IS antes de ejecutar IA.");
+      return;
+    }
     setAiLoading(true);
-    const response = await aiService.analizarCanvas({ organizationId: activeOrganization.id, context: { organization: activeOrganization, period: activePeriod, observations: activeObservations } });
-    setLastAiResponse(response);
-    commitState((current) => ({ ...current, aiHistory: [{ id: makeId("ai"), organizationId: activeOrganization.id, module: "Fase 1", operation: response.operation, logicalPrompt: "Analizar contexto ingresado por el usuario; sin buscadores.", model: response.mode === "MOCK" ? "MOCK" : "Gemini", response: JSON.stringify(response), decision: "PENDIENTE", createdAt: response.generatedAt }, ...current.aiHistory] }));
-    setAiLoading(false);
-    notify(response.mode === "MOCK" ? "Modo demostración / MOCK: la aplicación local continúa operativa." : "Propuesta IA recibida para revisión.");
+    try {
+      const request = { organizationId: activeOrganization.id, context: aiContext(sourceVersion) };
+      const response = operation === "generarToBe"
+        ? await aiService.generarToBe(request)
+        : operation === "detectarInconsistencias"
+          ? await aiService.detectarInconsistencias(request)
+          : await aiService.analizarCanvas(request);
+      registerAiResponse(sourceVersion, response);
+      setView("ai-analysis");
+      notify(response.mode === "MOCK" ? "Propuesta MOCK recibida; revisa antes de decidir." : "Respuesta Gemini recibida; revisa antes de decidir.");
+    } catch {
+      notify("No se pudo completar la operación IA. Las funciones locales continúan operativas.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function runMockAssistant() {
+    const sourceVersion = state.canvasVersions.find((item) => item.organizationId === activeOrganization?.id && item.periodId === activePeriod?.id && item.kind === "AS_IS");
+    if (!sourceVersion) {
+      notify("Crea un Canvas AS IS antes de probar el asistente IA.");
+      navigate("canvas-as-is");
+      return;
+    }
+    void runAiOperation("analizarCanvas", sourceVersion.id);
+  }
+
+  function handleAiDecision(decision: AiDecision, sourceVersionId: string, historyId: string, response: AiResponse, proposals: AiElementProposal[]) {
+    const historyEntry = state.aiHistory.find((entry) => entry.id === historyId);
+    if (!historyEntry || historyEntry.decision !== "PENDIENTE") {
+      notify("Esta propuesta ya tiene una decisión registrada.");
+      return;
+    }
+    const now = new Date().toISOString();
+    if (decision === "RECHAZADA") {
+      commitState((current) => ({ ...current, aiHistory: current.aiHistory.map((entry) => entry.id === historyId ? { ...entry, decision, decisionAt: now } : entry) }));
+      notify("Propuesta rechazada. El Canvas no fue modificado.");
+      return;
+    }
+    if (!proposals.length) {
+      notify("No hay propuestas aplicables para crear un TO BE.");
+      return;
+    }
+    const sourceVersion = state.canvasVersions.find((item) => item.id === sourceVersionId && item.organizationId === activeOrganization?.id && item.periodId === activePeriod?.id && item.kind === "AS_IS");
+    if (!sourceVersion) {
+      notify("La versión AS IS de origen ya no está disponible.");
+      return;
+    }
+    const version = Math.max(0, ...state.canvasVersions.filter((item) => item.organizationId === sourceVersion.organizationId && item.periodId === sourceVersion.periodId && item.kind === "TO_BE").map((item) => item.version)) + 1;
+    const name = decision === "EDITADA" ? "TO BE editado a partir de IA" : "TO BE propuesto por IA";
+    const canvasVersion = buildToBeFromAi(sourceVersion, proposals, version, name, now, makeId);
+    const storedResponse = { ...response, sourceVersionId: sourceVersion.id, proposals };
+    commitState((current) => ({ ...current, canvasVersions: [canvasVersion, ...current.canvasVersions], aiHistory: current.aiHistory.map((entry) => entry.id === historyId ? { ...entry, decision, decisionAt: now, proposalVersionId: canvasVersion.id, response: JSON.stringify(storedResponse) } : entry) }));
+    setLastAiResponse(storedResponse);
+    navigate("canvas-to-be");
+    notify(decision === "EDITADA" ? "Cambios guardados y TO BE editable creado." : "Propuesta aceptada y TO BE editable creado.");
   }
 
   function exportObservations() {
@@ -433,9 +514,10 @@ export default function CanvasModelApp() {
           {view === "data" && <DataView observations={activeObservations} period={activePeriod} periods={organizationPeriods} onObservation={handleObservation} onEditObservation={(id) => { setEditingObservationId(id); setModal("edit-observation"); }} onImportFile={handleImportFile} onConfirmImport={confirmImport} importPreview={importPreview} importing={importing} onExport={exportObservations} />}
           {(view === "canvas-as-is" || view === "canvas-to-be") && <CanvasEditorView state={state} organization={activeOrganization} period={activePeriod} kind={view === "canvas-as-is" ? "AS_IS" : "TO_BE"} onCreateVersion={handleCreateCanvasVersion} onCloneVersion={handleCloneCanvasVersion} onSaveElement={handleSaveCanvasElement} onDeleteElement={handleDeleteCanvasElement} onTransitionStatus={handleCanvasStatus} onCreateScenario={handleCreateScenario} />}
           {view === "comparison" && <CanvasComparisonView state={state} organization={activeOrganization} period={activePeriod} />}
-          {view === "ai-history" && <AiHistoryView entries={state.aiHistory} organization={activeOrganization} />}
+          {view === "ai-analysis" && <AiAnalysisView state={state} organization={activeOrganization} period={activePeriod} response={lastAiResponse} historyId={lastAiHistoryId} loading={aiLoading} onAnalyze={(versionId) => { void runAiOperation("analizarCanvas", versionId); }} onGenerateToBe={(versionId) => { void runAiOperation("generarToBe", versionId); }} onDecision={(decision, sourceVersionId, historyId, response, proposals) => handleAiDecision(decision, sourceVersionId, historyId, response, proposals)} onNavigateCanvas={() => navigate("canvas-as-is")} />}
+          {view === "ai-history" && <AiHistoryViewV3 entries={state.aiHistory} organization={activeOrganization} />}
           {view === "configuration" && <ConfigurationView storageAvailable={storageAvailable} persisted={storageAvailable && hydrated} onMockAi={runMockAssistant} aiLoading={aiLoading} />}
-          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
+          {!(["dashboard", "organization", "data", "canvas-as-is", "canvas-to-be", "comparison", "ai-analysis", "ai-history", "configuration"] as AppView[]).includes(view) && <FutureModuleView meta={meta} />}
         </div>
       </section>
 
@@ -456,8 +538,8 @@ function DashboardView({ state, organization, period, observations, latestImport
   const sources = new Set(observations.map((item) => item.source)).size;
   return <>
     <section className="welcome-grid">
-      <div className="welcome-card"><div><span className="eyebrow light">FASE 2 · CANVAS AS IS + TO BE</span><h2>Un contexto confiable para tomar decisiones.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>DATOS</span><i>AS IS</i><b>IA</b></div></div>
-      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>Canvas listo para evolucionar</h3><p>El modelo actual y las alternativas futuras se guardan por organización, periodo y versión.</p><button className="text-button" onClick={() => navigate("canvas-as-is")}>Abrir Canvas AS IS →</button></div>
+      <div className="welcome-card"><div><span className="eyebrow light">FASE 3 · INTELIGENCIA ARTIFICIAL</span><h2>Un contexto confiable para tomar decisiones.</h2><p>{organization?.description ?? "Crea una organización para comenzar."}</p></div><div className="welcome-orbit"><span>DATOS</span><i>AS IS</i><b>IA</b></div></div>
+      <div className="phase-card"><span className="status-pill success">● Operativo</span><h3>IA propone, tú decides</h3><p>Los hallazgos y cambios futuros se presentan como propuestas revisables, sin modificar automáticamente el Canvas.</p><button className="text-button" onClick={() => navigate("ai-analysis")}>Abrir análisis IA →</button></div>
     </section>
     <div className="metric-grid">
       <MetricCard label="Organizaciones" value={formatNumber(state.organizations.length, 0)} detail="Contextos registrados" icon="▣" tone="green" />
@@ -467,7 +549,7 @@ function DashboardView({ state, organization, period, observations, latestImport
     </div>
     <section className="dashboard-columns">
       <div className="panel observations-panel"><PanelHeading title="Observaciones recientes" description={period ? `${period.label} · ${observations.length} registros` : "Sin periodo seleccionado"}><button className="outline-button" onClick={() => navigate("data")}>Gestionar datos</button></PanelHeading>{observations.length ? <div className="observation-list">{observations.slice(0, 6).map((item) => <ObservationRow key={item.id} observation={item} />)}</div> : <EmptyState title="Aún no hay datos" description="Registra una observación manual o importa un archivo validado." action="Ir a Datos" onAction={() => navigate("data")} />}</div>
-      <aside className="panel readiness-panel"><PanelHeading title="Progreso del núcleo" description="Capacidades preparadas para la siguiente fase." /><div className="readiness-item"><span className="readiness-icon done">✓</span><div><strong>Organizaciones y periodos</strong><small>Separación lógica activa</small></div><em>Listo</em></div><div className="readiness-item"><span className="readiness-icon done">✓</span><div><strong>Ingreso manual e importación</strong><small>CSV/XLSX con validación</small></div><em>Listo</em></div><div className="readiness-item"><span className="readiness-icon pending">✦</span><div><strong>Asistente IA desacoplado</strong><small>{lastAiResponse?.mode === "REAL" ? "Respuesta real" : "Mock disponible"}</small></div><em>{lastAiResponse?.mode === "REAL" ? "Activo" : "Mock"}</em></div><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Consultando…" : "Probar asistente IA · MOCK"}</button>{lastAiResponse && <div className="ai-result"><span>{lastAiResponse.title}</span><p>{lastAiResponse.findings[0]?.text}</p></div>}<div className="import-mini"><span className="mini-label">ÚLTIMA IMPORTACIÓN</span>{latestImport ? <><strong>{latestImport.fileName}</strong><small>{latestImport.validRows}/{latestImport.processedRows} filas válidas · {formatDate(latestImport.importedAt)}</small></> : <small>No hay importaciones registradas.</small>}</div></aside>
+      <aside className="panel readiness-panel"><PanelHeading title="Progreso de la fase" description="Capacidades de IA preparadas para revisión humana." /><div className="readiness-item"><span className="readiness-icon done">✓</span><div><strong>Organizaciones y periodos</strong><small>Separación lógica activa</small></div><em>Listo</em></div><div className="readiness-item"><span className="readiness-icon done">✓</span><div><strong>Ingreso manual e importación</strong><small>CSV/XLSX con validación</small></div><em>Listo</em></div><div className="readiness-item"><span className="readiness-icon done">✓</span><div><strong>Análisis IA contextual</strong><small>{lastAiResponse?.mode === "REAL" ? "Respuesta real" : "Mock disponible"}</small></div><em>{lastAiResponse?.mode === "REAL" ? "Activo" : "Mock"}</em></div><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Consultando…" : "Analizar AS IS · MOCK"}</button>{lastAiResponse && <div className="ai-result"><span>{lastAiResponse.title}</span><p>{lastAiResponse.summary}</p></div>}<div className="import-mini"><span className="mini-label">ÚLTIMA IMPORTACIÓN</span>{latestImport ? <><strong>{latestImport.fileName}</strong><small>{latestImport.validRows}/{latestImport.processedRows} filas válidas · {formatDate(latestImport.importedAt)}</small></> : <small>No hay importaciones registradas.</small>}</div></aside>
     </section>
   </>;
 }
@@ -494,13 +576,13 @@ function PeriodForm({ onSubmit, initial, onCancel, submitLabel }: { onSubmit: (e
   return <form className="form-stack" onSubmit={onSubmit}><label className="field"><span>Código de periodo</span><input name="code" required placeholder="2026-11 o 2026-Q4" defaultValue={initial?.code ?? ""} /></label><label className="field"><span>Nombre visible</span><input name="label" placeholder="Noviembre 2026" defaultValue={initial?.label ?? ""} /></label><div className="form-two"><label className="field"><span>Inicio</span><input name="startsOn" required type="date" defaultValue={initial?.startsOn ?? ""} /></label><label className="field"><span>Fin</span><input name="endsOn" required type="date" defaultValue={initial?.endsOn ?? ""} /></label></div><div className="modal-actions"><button type="button" className="outline-button" onClick={onCancel}>Cancelar</button><button className="primary-button" type="submit">{submitLabel}</button></div></form>;
 }
 
-function AiHistoryView({ entries, organization }: { entries: AppState["aiHistory"]; organization?: Organization }) {
-  const filtered = entries.filter((entry) => entry.organizationId === organization?.id);
-  return <section className="panel history-panel"><PanelHeading title="Historial de IA" description="Cada interacción queda registrada como propuesta pendiente de decisión." />{filtered.length ? <div className="history-list">{filtered.map((entry) => <article className="history-row" key={entry.id}><div><span className={`mode-tag ${entry.model === "MOCK" ? "mock" : "real"}`}>{entry.model}</span><strong>{entry.operation}</strong><small>{formatDate(entry.createdAt)} · decisión: {entry.decision}</small></div><p>{entry.response}</p></article>)}</div> : <EmptyState title="Aún no hay interacciones" description="Prueba el asistente IA desde el Dashboard; en Fase 1 funcionará en modo MOCK." />}</section>;
+function ConfigurationView({ storageAvailable, persisted, onMockAi, aiLoading }: { storageAvailable: boolean; persisted: boolean; onMockAi: () => void; aiLoading: boolean }) {
+  return <div className="configuration-grid"><section className="panel"><PanelHeading title="Estado de ejecución" description="Indicadores técnicos visibles para la demostración." /><div className="config-list"><ConfigRow label="Persistencia local" value={storageAvailable ? "Disponible" : "No disponible"} state={storageAvailable ? "success" : "warning"} detail="Snapshot primario + respaldo local" /><ConfigRow label="Estado actual" value={persisted ? "Guardado" : "En memoria"} state={persisted ? "success" : "warning"} detail="Guardado inmediato y también al cerrar la pestaña" /><ConfigRow label="Operación offline" value="Activa" state="success" detail="Canvas y propuestas guardadas no dependen de red" /><ConfigRow label="Clave Gemini" value="Solo servidor" state="neutral" detail="Nunca se incluye en frontend, Electron o Git" /></div></section><section className="panel architecture-panel"><PanelHeading title="Servicio IA" description="Endpoint seguro y abstracción centralizada." /><div className="service-diagram"><span>UI React</span><b>→</b><span>aiService</span><b>→</b><span>/api/ai</span></div><p>Sin <code>GEMINI_API_KEY</code>, el endpoint responde en modo MOCK contextual. Si Gemini falla, la aplicación local continúa operativa.</p><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Probando…" : "Ejecutar análisis MOCK"}</button></section><section className="decision-card"><span className="eyebrow light">DECISIÓN DE ARQUITECTURA</span><h3>La IA propone; el usuario decide.</h3><p>Las respuestas se registran en el historial. Aceptar o editar crea un TO BE nuevo; rechazar no modifica el Canvas de origen.</p></section></div>;
 }
 
-function ConfigurationView({ storageAvailable, persisted, onMockAi, aiLoading }: { storageAvailable: boolean; persisted: boolean; onMockAi: () => void; aiLoading: boolean }) {
-  return <div className="configuration-grid"><section className="panel"><PanelHeading title="Estado de ejecución" description="Indicadores técnicos visibles para la demostración." /><div className="config-list"><ConfigRow label="Persistencia local" value={storageAvailable ? "Disponible" : "No disponible"} state={storageAvailable ? "success" : "warning"} detail="Snapshot primario + respaldo local" /><ConfigRow label="Estado actual" value={persisted ? "Guardado" : "En memoria"} state={persisted ? "success" : "warning"} detail="Guardado inmediato y también al cerrar la pestaña" /><ConfigRow label="Operación offline" value="Activa" state="success" detail="Organizaciones, periodos y datos no dependen de red" /><ConfigRow label="Clave Gemini" value="Solo servidor" state="neutral" detail="Nunca se incluye en frontend, Electron o Git" /></div></section><section className="panel architecture-panel"><PanelHeading title="Servicio IA" description="Una única abstracción centralizada." /><div className="service-diagram"><span>UI React</span><b>→</b><span>aiService</span><b>→</b><span>/api/ai</span></div><p>Si no existe <code>GEMINI_API_KEY</code>, el endpoint responde claramente en modo MOCK y la operación local continúa.</p><button className="ai-action" onClick={onMockAi} disabled={aiLoading}>{aiLoading ? "Probando…" : "Ejecutar prueba MOCK"}</button></section><section className="decision-card"><span className="eyebrow light">DECISIÓN DE ARQUITECTURA</span><h3>Una sola aplicación para web y escritorio.</h3><p>La lógica vive en <code>src/</code>. Vite/vinext entrega la versión web y el contenedor Electron cargará el mismo build en la Fase 7.</p></section></div>;
+function AiHistoryViewV3({ entries, organization }: { entries: AppState["aiHistory"]; organization?: Organization }) {
+  const filtered = entries.filter((entry) => entry.organizationId === organization?.id);
+  return <section className="panel history-panel"><PanelHeading title="Historial de IA" description="Cada interacción se conserva con su respuesta y decisión del usuario." />{filtered.length ? <div className="history-list">{filtered.map((entry) => { let response: Partial<AiResponse> = {}; try { response = JSON.parse(entry.response) as Partial<AiResponse>; } catch { response = {}; } return <article className="history-row" key={entry.id}><div><span className={"mode-tag " + (entry.model === "MOCK" ? "mock" : "real")}>{entry.model}</span><strong>{entry.operation}</strong><small>{formatDate(entry.createdAt)} · decisión: {entry.decision}</small>{entry.proposalVersionId && <small>TO BE creado: {entry.proposalVersionId}</small>}</div><p><b>{response.title ?? "Respuesta registrada"}</b><br />{response.summary ?? "Respuesta estructurada registrada."}<small>{response.findings?.length ?? 0} hallazgos · {response.proposals?.length ?? 0} propuestas</small></p></article>; })}</div> : <EmptyState title="Aún no hay interacciones" description="Ejecuta un análisis desde Análisis IA para registrar una propuesta." />}</section>;
 }
 
 function FutureModuleView({ meta }: { meta: { eyebrow: string; title: string; description: string } }) {

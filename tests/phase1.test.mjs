@@ -88,8 +88,49 @@ test("la IA está desacoplada y el endpoint no expone secretos al cliente", asyn
   const envExample = await readFile(new URL("../.env.example", import.meta.url), "utf8");
   assert.match(aiService, /\/api\/ai/);
   assert.match(route, /process\.env\.GEMINI_API_KEY/);
-  assert.match(route, /MOCK/);
+  assert.match(route, /createMockResponse/);
   assert.doesNotMatch(envExample, /GEMINI_API_KEY=\S+/);
+});
+
+test("Fase 3 genera análisis MOCK contextual y propuestas TO BE trazables", async () => {
+  const { createDemoState } = await import(new URL("../src/data/demoData.ts", import.meta.url).href);
+  const { createMockResponse, buildToBeFromAi } = await import(new URL("../src/services/ai/aiModel.ts", import.meta.url).href);
+  const state = createDemoState();
+  const asIs = state.canvasVersions.find((item) => item.kind === "AS_IS");
+  assert.ok(asIs);
+  const context = { organization: state.organizations[0], period: state.periods[1], canvas: asIs, observations: state.observations.filter((item) => item.periodId === state.periods[1].id) };
+  const analysis = createMockResponse("analizarCanvas", context);
+  assert.equal(analysis.mode, "MOCK");
+  assert.equal(analysis.status, "PROPOSAL");
+  assert.ok(analysis.findings.some((item) => item.type === "HECHO"));
+  const proposalResponse = createMockResponse("generarToBe", context);
+  assert.ok(proposalResponse.proposals.length >= 1);
+  assert.ok(proposalResponse.proposals.some((item) => item.action === "MODIFICAR" && item.sourceElementId));
+  const toBe = buildToBeFromAi(asIs, proposalResponse.proposals, 2, "TO BE propuesto por IA", "2026-11-01T10:00:00.000Z", (prefix) => prefix + "-test");
+  assert.equal(toBe.kind, "TO_BE");
+  assert.equal(toBe.status, "BORRADOR");
+  assert.equal(toBe.sourceVersionId, asIs.id);
+  assert.equal(asIs.elements.find((item) => item.block === "channels")?.title, "Venta presencial");
+  assert.ok(toBe.elements.some((item) => item.title.includes("catálogo digital")));
+});
+
+test("Fase 3 normaliza respuestas estructuradas y descarta propuestas inválidas", async () => {
+  const { normalizeAiResponse } = await import(new URL("../src/services/ai/aiModel.ts", import.meta.url).href);
+  const response = normalizeAiResponse({
+    mode: "REAL",
+    title: "Diagnóstico validado",
+    summary: "Resumen de prueba",
+    findings: [{ type: "HECHO", title: "Cobertura", text: "Hay información", confidence: "ALTA" }],
+    proposals: [
+      { id: "valid", block: "channels", action: "CREAR", title: "Canal digital", description: "Propuesta revisable", confidence: 60, tags: [] },
+      { id: "invalid", block: "no-existe", action: "CREAR", title: "No aplicar", description: "Debe descartarse" },
+    ],
+  }, "generarToBe");
+  assert.equal(response?.mode, "REAL");
+  assert.equal(response?.operation, "generarToBe");
+  assert.equal(response?.findings.length, 1);
+  assert.equal(response?.proposals.length, 1);
+  assert.equal(response?.proposals[0].block, "channels");
 });
 
 test("el build servido contiene la identidad de Canvas Model IA", async () => {

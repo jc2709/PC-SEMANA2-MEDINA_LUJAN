@@ -1,30 +1,7 @@
-export type AiOperation = "analizarCanvas" | "detectarInconsistencias" | "generarToBe" | "proponerProyectos" | "explicarPrediccion" | "generarRecomendaciones";
+import { createMockResponse, normalizeAiResponse, type AiRequest, type AiResponse } from "./aiModel";
 
-export interface AiRequest {
-  operation: AiOperation;
-  organizationId: string;
-  context: Record<string, unknown>;
-}
-
-export interface AiResponse {
-  mode: "MOCK" | "REAL";
-  operation: AiOperation;
-  status: "PROPOSAL";
-  title: string;
-  findings: Array<{ type: "HECHO" | "HIPOTESIS" | "RECOMENDACION" | "INFERENCIA"; text: string; confidence: "BAJA" | "MEDIA" | "ALTA" }>;
-  generatedAt: string;
-}
-
-export function mockResponse(operation: AiOperation): AiResponse {
-  return {
-    mode: "MOCK",
-    operation,
-    status: "PROPOSAL",
-    title: "Modo demostración / MOCK",
-    findings: [{ type: "RECOMENDACION", text: "La Fase 1 ya tiene el servicio desacoplado. Agrega información del Canvas en la Fase 2 para obtener un análisis contextual.", confidence: "MEDIA" }],
-    generatedAt: new Date().toISOString(),
-  };
-}
+export type { AiConfidence, AiDecision, AiElementProposal, AiFinding, AiFindingType, AiOperation, AiProposalAction, AiRequest, AiResponse } from "./aiModel";
+export { createMockResponse as mockResponse, normalizeAiResponse } from "./aiModel";
 
 async function callAi(request: AiRequest): Promise<AiResponse> {
   try {
@@ -32,14 +9,13 @@ async function callAi(request: AiRequest): Promise<AiResponse> {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(12000),
     });
-    if (!response.ok) return mockResponse(request.operation);
+    if (!response.ok) return createMockResponse(request.operation, request.context, "respuesta HTTP " + response.status);
     const data: unknown = await response.json();
-    if (!data || typeof data !== "object" || !("mode" in data)) return mockResponse(request.operation);
-    return data as AiResponse;
+    return normalizeAiResponse(data, request.operation) ?? createMockResponse(request.operation, request.context, "respuesta no estructurada");
   } catch {
-    return mockResponse(request.operation);
+    return createMockResponse(request.operation, request.context, "endpoint no disponible o sin conexión");
   }
 }
 

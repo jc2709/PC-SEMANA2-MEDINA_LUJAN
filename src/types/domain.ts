@@ -79,6 +79,9 @@ export interface AiHistoryEntry {
   response: string;
   decision: "PENDIENTE" | "ACEPTADA" | "EDITADA" | "RECHAZADA";
   createdAt: string;
+  sourceVersionId?: string;
+  proposalVersionId?: string;
+  decisionAt?: string;
 }
 
 export interface CanvasScenario {
@@ -146,6 +149,7 @@ export type AppView =
   | "canvas-as-is"
   | "canvas-to-be"
   | "comparison"
+  | "ai-analysis"
   | "projects"
   | "gantt"
   | "tracking"
