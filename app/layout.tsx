@@ -10,20 +10,20 @@ export async function generateMetadata(): Promise<Metadata> {
   const image = `${origin}/og.png`;
 
   return {
-    title: "Almacén Nexo | Inventario bajo control",
-    description: "Sistema de almacén para controlar inventario, alertas de stock, entradas, salidas y proveedores.",
+    title: "Canvas Model IA | Modelo de negocio con evidencia",
+    description: "Sistema local para organizar datos, periodos y decisiones de evolución del Business Model Canvas.",
     openGraph: {
-      title: "Almacén Nexo",
-      description: "Inventario bajo control: existencias, movimientos y alertas en un solo lugar.",
+      title: "Canvas Model IA",
+      description: "Datos, contexto y decisiones para evolucionar el modelo de negocio.",
       type: "website",
       locale: "es_PE",
       url: origin,
-      images: [{ url: image, width: 1200, height: 630, alt: "Panel de control de Almacén Nexo" }],
+      images: [{ url: image, width: 1200, height: 630, alt: "Panel de control de Canvas Model IA" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Almacén Nexo",
-      description: "Inventario bajo control: existencias, movimientos y alertas en un solo lugar.",
+      title: "Canvas Model IA",
+      description: "Datos, contexto y decisiones para evolucionar el modelo de negocio.",
       images: [image],
     },
   };

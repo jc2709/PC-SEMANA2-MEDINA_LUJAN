@@ -1,8 +1,8 @@
-# vinext-starter
+# Canvas Model IA
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Sistema informático local para formular y evolucionar el Business Model Canvas. Esta entrega implementa únicamente la Fase 1: preparación, núcleo, organizaciones, periodos, observaciones e importación validada.
+
+El repositorio conserva `vinext` porque ya era el runtime React + TypeScript + Vite del proyecto y ofrece una ruta compatible con el endpoint Vercel preparado en `app/api/ai`.
 
 ## Prerequisites
 
@@ -18,14 +18,18 @@ npm run build
 
 This starter does not use `wrangler.jsonc`.
 
-## Included Shape
+## Fase 1 incluida
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `src/types/`: contratos de dominio.
+- `src/services/storage/`: persistencia local versionada.
+- `src/services/import/`: lectura XLSX/CSV, preview y validación por fila.
+- `src/services/ai/`: abstracción única de IA con fallback MOCK.
+- `app/api/ai/`: endpoint server-side preparado para Gemini.
+- `electron/`: contenedor inicial para compartir el mismo build en escritorio.
+- `test-data/`: dataset CSV reproducible de demostración.
+- `docs/`: alcance, arquitectura, manual y evidencias.
+
+Los módulos Canvas, proyectos, Gantt, KPI, predicción, simulación, reportes y PPTX permanecen bloqueados visualmente hasta aprobar la Fase 1.
 
 ## Workspace Auth Headers
 
@@ -91,7 +95,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
+- `npm test`: build y pruebas automáticas de contrato de Fase 1
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
 ## Learn More

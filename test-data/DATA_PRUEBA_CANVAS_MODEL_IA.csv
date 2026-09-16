@@ -1,0 +1,16 @@
+KPI,Periodo,Valor,Unidad,Fuente,Calidad,Fecha
+Ventas,2026-08,68200,PEN,ERP comercial,ALTA,2026-08-31
+Costos operativos,2026-08,40100,PEN,ERP comercial,ALTA,2026-08-31
+Clientes activos,2026-08,418,clientes,CRM,ALTA,2026-08-31
+Conversión,2026-08,3.8,%,Embudo comercial,MEDIA,2026-08-31
+Ticket promedio,2026-08,163,PEN,ERP comercial,ALTA,2026-08-31
+Ventas,2026-09,70400,PEN,ERP comercial,ALTA,2026-09-30
+Costos operativos,2026-09,41400,PEN,ERP comercial,ALTA,2026-09-30
+Clientes activos,2026-09,436,clientes,CRM,ALTA,2026-09-30
+Conversión,2026-09,4.1,%,Embudo comercial,MEDIA,2026-09-30
+Ticket promedio,2026-09,161.5,PEN,ERP comercial,ALTA,2026-09-30
+Ventas,2026-10,73100,PEN,ERP comercial,ALTA,2026-10-31
+Costos operativos,2026-10,42200,PEN,ERP comercial,ALTA,2026-10-31
+Clientes activos,2026-10,451,clientes,CRM,ALTA,2026-10-31
+Conversión,2026-10,4.3,%,Embudo comercial,MEDIA,2026-10-31
+Ticket promedio,2026-10,162,PEN,ERP comercial,ALTA,2026-10-31

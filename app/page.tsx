@@ -1,5 +1,5 @@
-import WarehouseApp from "./WarehouseApp";
+import CanvasModelApp from "../src/CanvasModelApp";
 
 export default function Home() {
-  return <WarehouseApp />;
+  return <CanvasModelApp />;
 }
